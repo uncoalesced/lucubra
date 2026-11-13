@@ -1,0 +1,43 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "lucubra"
+dynamic = ["version"]
+description = "Local-first study engine for students using any AI assistant"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+keywords = ["study", "mcp", "local-first", "spaced-repetition"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Education",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: Education",
+]
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/uncoalesced/lucubra"
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "ruff>=0.8,<1"]
+
+[tool.maturin]
+bindings = "bin"
+manifest-path = "crates/lucubra-cli/Cargo.toml"
+python-source = "python"
+module-name = "lucubra_workers"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["python", "scripts"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
