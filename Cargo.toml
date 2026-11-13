@@ -1,0 +1,29 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/uncoalesced/lucubra"
+publish = false
+
+[workspace.dependencies]
+lucubra-core = { path = "crates/lucubra-core", version = "0.0.1" }
+lucubra-ingest = { path = "crates/lucubra-ingest", version = "0.0.1" }
+lucubra-mcp = { path = "crates/lucubra-mcp", version = "0.0.1" }
+lucubra-pack = { path = "crates/lucubra-pack", version = "0.0.1" }
+lucubra-companion = { path = "crates/lucubra-companion", version = "0.0.1" }
+rusqlite = { version = "0.42", features = ["bundled"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
