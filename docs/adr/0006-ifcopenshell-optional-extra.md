@@ -28,4 +28,4 @@ This is engineering licence analysis, not legal advice.
 
 - Lucubra conveys no Combined Work, so it carries no LGPL obligation under this design.
 - Any future installer that bundles IfcOpenShell would take on the section 4 obligations of the LGPL and requires a new decision.
-- Whether the PyPI wheel contains Open CASCADE binaries was not confirmed from a primary source.
+- The `ifcopenshell` 0.9.0.post1 `win_amd64` wheel bundles more than 50 Open CASCADE libraries (reported 2026-11-13). PyPI distributes them, not Lucubra, so the decision stands. The Python runtime dependencies of `ifcopenshell` were reported permissive.
