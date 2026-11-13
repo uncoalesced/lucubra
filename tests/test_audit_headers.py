@@ -41,6 +41,12 @@ def test_source_without_spdx_fails(tmp_path):
     assert audit.audit(tmp_path)[0] == ["x.sh: missing SPDX line"]
 
 
+def test_byte_order_mark_before_headers_passes(tmp_path):
+    (tmp_path / "bom.rs").write_bytes(b"\xef\xbb\xbf" + RS_HEADER.encode("utf-8"))
+    (tmp_path / "bom.ps1").write_bytes(b"\xef\xbb\xbf" + PY_HEADER.encode("utf-8"))
+    assert audit.audit(tmp_path) == ([], 2, 0)
+
+
 def test_header_below_the_window_fails(tmp_path):
     (tmp_path / "late.py").write_text("\n" * 10 + PY_HEADER, encoding="utf-8")
     assert audit.audit(tmp_path)[0] == [
