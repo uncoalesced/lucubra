@@ -1,0 +1,8 @@
+/target/
+/dist/
+.venv/
+__pycache__/
+*.py[cod]
+*.whl
+.pytest_cache/
+.ruff_cache/
