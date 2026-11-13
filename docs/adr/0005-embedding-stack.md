@@ -31,5 +31,5 @@ Read on 2026-11-12 and 2026-11-13 from PyPI and the Hugging Face Hub API:
 ## Consequences
 
 - The multilingual model is a large download. The planner and search work fully without it.
-- The licences of indirect dependencies of `model2vec` (jinja2, joblib and others) are checked by `scripts/check_python_licenses.py` when the extra is added in M2.
+- The runtime dependencies of `model2vec`, two levels deep, were reported permissive on 2026-11-13. They include PSF-2.0 for typing-extensions, and CC0-1.0 and 0BSD for components bundled in numpy. `scripts/check_python_licenses.py` re-checks them when the extra is added in M2; PSF-2.0, CC0-1.0 and 0BSD must be added to its allow list then.
 - Retrieval quality of the chosen models on study material is not measured in M0. M10 measures it on the fixture corpus.
