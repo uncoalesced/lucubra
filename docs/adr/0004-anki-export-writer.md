@@ -28,4 +28,5 @@ Lucubra writes `.apkg` files itself in Rust, with the `zip` and `rusqlite` crate
 
 - `genanki` is not used, because its required `frozendict` dependency is LGPL-3.0-only and would break the permissive dependency policy for the default install.
 - The writer must track the collection schema that current Anki releases import. M6 adds an import check against a current Anki release, run by hand and recorded in the gate ledger.
-- Anki's own licence and schema documentation were not read for this decision. The writer relies on the file format alone.
+- Anki is licensed under AGPL-3.0-or-later (repository `LICENSE`, read 2026-11-13). No Anki code is copied, so its licence does not reach the writer.
+- Ankitects publishes no official schema for `.apkg` or `collection.anki2` and warns against writing the database directly. The writer therefore targets the import path Anki supports for `.apkg` files, and the M6 import check is the authority on compatibility.
