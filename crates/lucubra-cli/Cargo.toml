@@ -1,0 +1,22 @@
+[package]
+name = "lucubra-cli"
+description = "Command line entry point for Lucubra"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "lucubra"
+path = "src/main.rs"
+
+[dependencies]
+lucubra-core.workspace = true
+lucubra-ingest.workspace = true
+lucubra-mcp.workspace = true
+lucubra-pack.workspace = true
+lucubra-companion.workspace = true
+
+[lints]
+workspace = true
