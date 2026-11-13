@@ -72,7 +72,8 @@ def check_file(path: Path) -> tuple[bool, list[str]]:
     data = path.read_bytes()
     if b"\0" in data[:8192]:
         return False, []
-    text = data.decode("utf-8", errors="replace")
+    # utf-8-sig drops a leading byte order mark, which Windows tools often write.
+    text = data.decode("utf-8-sig", errors="replace")
     prefix = COMMENT_PREFIX.get(path.suffix.lower())
     problems = []
     if prefix is None:
