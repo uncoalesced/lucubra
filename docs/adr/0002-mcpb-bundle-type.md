@@ -14,7 +14,7 @@ Read on 2026-11-12 and 2026-11-13:
 
 - The MCPB manifest specification (`modelcontextprotocol/mcpb`, `MANIFEST.md`) defines `uv` as a Python server type for manifest version 0.4 and later. It does not describe the type as experimental. A `uv` bundle must contain `pyproject.toml` and must not contain `server/lib/` or `server/venv/`. The host installs Python and the dependencies with uv.
 - The specification states that `mcp_config` is optional for `uv`. The `@anthropic-ai/mcpb` command line tool, version 2.1.2, rejects a `uv` manifest without it (`server.mcp_config: Required`). With `mcp_config` set to `uv run --directory ${__dirname} src/server.py`, the manifest validates and packs.
-- The Claude Help Center article on desktop extensions (10949351) states that extensions from the official directory update automatically by default, and that privately distributed `.mcpb` files must be reinstalled manually. It does not state which plans may install extensions.
+- The Claude Help Center article on desktop extensions (10949351) states that extensions from the official directory update automatically by default, and that privately distributed `.mcpb` files must be reinstalled manually. It does not state which plans may install extensions. Help Center article 11176164, read 2026-11-14, states: "Desktop extensions are available to all users on Claude Desktop."
 - A spike bundle (`lucubra-mcpb-spike-0.0.1.mcpb`, 1,086 bytes) was built. Run with `uv` as a host would, it answered `initialize`, listed its tool and returned a tool result over stdio.
 
 Not tested: installation of the spike bundle in Claude Desktop on Windows or macOS, and installation on a Free account.
