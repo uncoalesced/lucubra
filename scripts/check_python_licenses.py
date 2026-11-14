@@ -26,6 +26,7 @@ ALLOWED = {
     "PSF-2.0",
     "CC0-1.0",
     "0BSD",
+    "MIT-CMU",
 }
 # Distributions whose metadata states the licence as free text, reviewed by
 # hand against the licence files in the wheel. The exact declared text is
