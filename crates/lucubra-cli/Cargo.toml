@@ -17,6 +17,10 @@ lucubra-ingest.workspace = true
 lucubra-mcp.workspace = true
 lucubra-pack.workspace = true
 lucubra-companion.workspace = true
+clap.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true
