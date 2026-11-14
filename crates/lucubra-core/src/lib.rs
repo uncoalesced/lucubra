@@ -3,6 +3,20 @@
 
 //! Domain model, event log, replay, planner and storage for Lucubra.
 
+pub mod appdata;
+pub mod cache;
+pub mod error;
+pub mod event;
+pub mod hlc;
+pub mod log;
+pub mod projection;
+pub mod replay;
+pub mod state;
+pub mod workspace;
+
+pub use error::{Error, Result};
+pub use workspace::Workspace;
+
 /// Version of the Lucubra engine, taken from the workspace manifest.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
