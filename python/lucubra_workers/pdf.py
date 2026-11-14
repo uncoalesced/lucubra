@@ -13,18 +13,13 @@ import os
 from importlib import metadata
 from typing import Any
 
+from lucubra_workers.errors import ExtractError
+
+__all__ = ["ExtractError", "VISION_MIN_CHARS", "extract_pdf", "visible_chars"]
+
 VISION_MIN_CHARS = 40
 MAX_FILE_BYTES = 1 << 30
 MAX_TEXT_BYTES = 64 << 20
-
-
-class ExtractError(Exception):
-    """An extraction failure with an ADR 0011 code."""
-
-    def __init__(self, code: str, detail: str) -> None:
-        super().__init__(detail)
-        self.code = code
-        self.detail = detail
 
 
 def _extractor() -> str:
