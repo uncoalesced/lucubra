@@ -11,6 +11,7 @@ publish.workspace = true
 lucubra-core.workspace = true
 blake3.workspace = true
 serde_json.workspace = true
+csv.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
