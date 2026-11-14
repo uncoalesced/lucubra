@@ -30,7 +30,32 @@ def handle(request: Any) -> dict[str, Any]:
     op = request.get("op")
     if op == "ping":
         return {"id": request_id, "ok": True, "worker": __version__}
+    if op == "extract":
+        return _extract(request_id, request)
     return _error(request_id, "unknown_op", f"unsupported op: {op!r}")
+
+
+def _extract(request_id: Any, request: dict[str, Any]) -> dict[str, Any]:
+    from lucubra_workers.pdf import ExtractError, extract_pdf
+
+    path = request.get("path")
+    opts = request.get("opts") or {}
+    fmt = opts.get("format") if isinstance(opts, dict) else None
+    if not isinstance(path, str) or not path:
+        return _error(request_id, "bad_request", "extract needs a path")
+    extractors = {"pdf": extract_pdf}
+    extractor = extractors.get(fmt)
+    if extractor is None:
+        return _error(request_id, "unsupported", f"no worker extractor for {fmt!r}")
+    try:
+        result = extractor(path)
+    except ExtractError as exc:
+        return _error(request_id, exc.code, exc.detail)
+    except MemoryError:
+        return _error(request_id, "limit_exceeded", "out of memory while extracting")
+    except Exception as exc:  # one bad file must not stop the worker
+        return _error(request_id, "corrupt", f"{type(exc).__name__}: {exc}")
+    return {"id": request_id, "ok": True, **result}
 
 
 def serve(stdin: IO[str], stdout: IO[str]) -> None:
