@@ -23,7 +23,7 @@ use crate::native::{Chunk, Extracted};
 /// File name inside the workspace's app-data directory.
 pub const INDEX_FILE: &str = "ingest.sqlite";
 /// Schema version; a mismatch clears the index.
-pub const SCHEMA: i64 = 1;
+pub const SCHEMA: i64 = 2;
 
 /// One search result.
 #[derive(Debug, Clone, PartialEq)]
