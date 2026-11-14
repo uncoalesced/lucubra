@@ -486,7 +486,10 @@ dependencies = [
 name = "lucubra-ingest"
 version = "0.0.1"
 dependencies = [
+ "blake3",
  "lucubra-core",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
