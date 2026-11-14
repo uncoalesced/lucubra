@@ -44,6 +44,44 @@ impl WorkerSpec {
     }
 }
 
+/// Environment variable naming the Python interpreter for the workers.
+pub const PYTHON_ENV: &str = "LUCUBRA_PYTHON";
+
+/// Finds the Python that runs `lucubra_workers`: `LUCUBRA_PYTHON` if set,
+/// otherwise the interpreter installed next to the `lucubra` binary (the
+/// layout of a wheel install in a virtual environment or a `uv tool`).
+pub fn find_python() -> Option<PathBuf> {
+    if let Some(path) = std::env::var_os(PYTHON_ENV) {
+        return Some(PathBuf::from(path));
+    }
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    let names: &[&str] = if cfg!(windows) {
+        &["python.exe"]
+    } else {
+        &["python3", "python"]
+    };
+    names
+        .iter()
+        .map(|name| dir.join(name))
+        .find(|candidate| candidate.is_file())
+}
+
+/// Starts the Python workers and checks they answer a ping.
+pub fn python_supervisor(timeout: Duration) -> std::result::Result<Supervisor, String> {
+    let python = find_python().ok_or_else(|| {
+        format!("no Python found next to lucubra; set {PYTHON_ENV} to the interpreter")
+    })?;
+    let mut sup = Supervisor::new(WorkerSpec::python(&python), timeout);
+    match sup.request("ping", Path::new(""), json!({})) {
+        Reply::Ok(_) => Ok(sup),
+        Reply::Failed { code, detail } => Err(format!(
+            "worker at {} did not answer a ping ({code}: {detail})",
+            python.display()
+        )),
+    }
+}
+
 /// The result of one request.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Reply {
