@@ -6,6 +6,8 @@
 
 pub mod discover;
 pub mod hash;
+pub mod limits;
+pub mod native;
 pub mod route;
 pub mod scan;
 pub mod worker;
