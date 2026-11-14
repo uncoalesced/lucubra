@@ -47,6 +47,9 @@ enum Command {
     },
     /// Show event counts and warnings.
     Status(Target),
+    /// Find new and changed files, hash them and record them. Online-only
+    /// cloud files are counted, never read.
+    Scan(Target),
 }
 
 fn workspace_path(target: &Target) -> PathBuf {
@@ -129,6 +132,32 @@ fn run(command: Command) -> lucubra_core::Result<()> {
                 println!("  {kind}: {} line {}", bad.file.display(), bad.line);
             }
             println!("state-hash: {}", status.state_hash);
+        }
+        Command::Scan(target) => {
+            let ws = Workspace::open(&workspace_path(&target), &data_dir)?;
+            let report = lucubra_ingest::scan(&ws)?;
+            println!(
+                "files: {} new or changed, {} unchanged",
+                report.logged(),
+                report.unchanged
+            );
+            for file in report.hashed.iter().filter(|f| f.logged) {
+                println!(
+                    "  {} [{}] {}",
+                    file.rel,
+                    file.format.as_str(),
+                    &file.hash[..8]
+                );
+            }
+            let (count, bytes) = (report.online_only.len(), report.online_only_bytes());
+            if count > 0 {
+                println!(
+                    "online-only: {count} files, {bytes} bytes, not downloaded (reading them would download them)"
+                );
+            }
+            for problem in &report.problems {
+                println!("warning: {problem}");
+            }
         }
     }
     Ok(())
