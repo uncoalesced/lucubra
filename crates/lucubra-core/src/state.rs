@@ -1,0 +1,282 @@
+// SPDX-License-Identifier: Apache-2.0
+// Engineered by uncoalesced
+
+//! Replayed state (ADR 0008 rule 9).
+//!
+//! State is a set of named collections, each an ordered map from key to a JSON
+//! value. Only ordered maps are used, so serialisation is canonical and the
+//! state hash is the same on every device.
+
+use std::collections::BTreeMap;
+
+use serde_json::{Map, Value};
+
+use crate::event::{Event, RECORD_VERSION, is_known_type};
+
+/// Collection names.
+pub mod col {
+    /// Workspace identity: key `id`, plus other `workspace.initialized` fields.
+    pub const WORKSPACE: &str = "workspace";
+    /// Settings by key.
+    pub const SETTINGS: &str = "settings";
+    /// Profile fields by name.
+    pub const PROFILE: &str = "profile";
+    /// Exams by id.
+    pub const EXAMS: &str = "exams";
+    /// Subjects by slug.
+    pub const SUBJECTS: &str = "subjects";
+    /// Units by `<subject>/<unit>`.
+    pub const UNITS: &str = "units";
+    /// Preserved user edits by preserved path.
+    pub const PRESERVED: &str = "preserved";
+}
+
+/// Event types the M1 fold applies. Other known types are stored in the log
+/// and folded by later milestones.
+pub const FOLDED_TYPES: &[&str] = &[
+    "workspace.initialized",
+    "setting.changed",
+    "projection.preserved",
+    "profile.set",
+    "profile.skipped",
+    "exam.set",
+    "exam.removed",
+    "unit.created",
+    "unit.updated",
+];
+
+/// Why an event did not change state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Skip {
+    /// The record version is newer than this engine supports.
+    NewerVersion,
+    /// The event type is unknown to this engine.
+    UnknownType,
+    /// The payload is missing a required field.
+    BadPayload(&'static str),
+}
+
+/// Replayed workspace state.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct State {
+    /// Collections by name.
+    pub collections: BTreeMap<String, BTreeMap<String, Value>>,
+}
+
+fn str_field<'a>(data: &'a Value, name: &str) -> Option<&'a str> {
+    data.get(name)
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+}
+
+impl State {
+    /// Returns a collection, empty if absent.
+    pub fn collection(&self, name: &str) -> impl Iterator<Item = (&String, &Value)> {
+        self.collections.get(name).into_iter().flatten()
+    }
+
+    /// Returns one entry.
+    pub fn get(&self, name: &str, key: &str) -> Option<&Value> {
+        self.collections.get(name)?.get(key)
+    }
+
+    fn put(&mut self, name: &str, key: &str, value: Value) {
+        self.collections
+            .entry(name.to_owned())
+            .or_default()
+            .insert(key.to_owned(), value);
+    }
+
+    fn remove(&mut self, name: &str, key: &str) {
+        if let Some(map) = self.collections.get_mut(name) {
+            map.remove(key);
+            if map.is_empty() {
+                self.collections.remove(name);
+            }
+        }
+    }
+
+    /// Merges the fields of `data` into the object at `name`/`key`.
+    fn merge(&mut self, name: &str, key: &str, data: &Map<String, Value>) {
+        let mut current = match self.get(name, key) {
+            Some(Value::Object(map)) => map.clone(),
+            _ => Map::new(),
+        };
+        for (field, value) in data {
+            if value.is_null() {
+                current.remove(field);
+            } else {
+                current.insert(field.clone(), value.clone());
+            }
+        }
+        self.put(name, key, Value::Object(current));
+    }
+
+    /// Records a subject if it is not known yet, and sets its title if given.
+    fn touch_subject(&mut self, slug: &str, title: Option<&str>) {
+        let mut fields = Map::new();
+        fields.insert("slug".into(), Value::String(slug.to_owned()));
+        if let Some(title) = title {
+            fields.insert("title".into(), Value::String(title.to_owned()));
+        }
+        self.merge(col::SUBJECTS, slug, &fields);
+    }
+
+    /// Applies one event. Returns why the event was skipped, if it was.
+    pub fn apply(&mut self, event: &Event) -> Result<(), Skip> {
+        if event.v > RECORD_VERSION {
+            return Err(Skip::NewerVersion);
+        }
+        if !is_known_type(&event.kind) {
+            return Err(Skip::UnknownType);
+        }
+        let data = &event.data;
+        let empty = Map::new();
+        let fields = data.as_object().unwrap_or(&empty);
+        match event.kind.as_str() {
+            "workspace.initialized" => {
+                let id = str_field(data, "workspace_id").ok_or(Skip::BadPayload("workspace_id"))?;
+                // The first initialisation in replay order wins.
+                if self.get(col::WORKSPACE, "id").is_none() {
+                    self.put(col::WORKSPACE, "id", Value::String(id.to_owned()));
+                }
+            }
+            "setting.changed" => {
+                let key = str_field(data, "key").ok_or(Skip::BadPayload("key"))?;
+                match data.get("value") {
+                    None | Some(Value::Null) => self.remove(col::SETTINGS, key),
+                    Some(value) => self.put(col::SETTINGS, key, value.clone()),
+                }
+            }
+            "projection.preserved" => {
+                let to = str_field(data, "preserved_to").ok_or(Skip::BadPayload("preserved_to"))?;
+                self.put(col::PRESERVED, to, data.clone());
+            }
+            "profile.set" => {
+                for (field, value) in fields {
+                    if value.is_null() {
+                        self.remove(col::PROFILE, field);
+                    } else {
+                        self.put(col::PROFILE, field, value.clone());
+                    }
+                }
+            }
+            "profile.skipped" => self.put(col::PROFILE, "skipped", Value::Bool(true)),
+            "exam.set" => {
+                let id = str_field(data, "id").ok_or(Skip::BadPayload("id"))?;
+                if let Some(subject) = str_field(data, "subject") {
+                    self.touch_subject(subject, str_field(data, "subject_title"));
+                }
+                self.merge(col::EXAMS, id, fields);
+            }
+            "exam.removed" => {
+                let id = str_field(data, "id").ok_or(Skip::BadPayload("id"))?;
+                self.remove(col::EXAMS, id);
+            }
+            "unit.created" | "unit.updated" => {
+                let subject = str_field(data, "subject").ok_or(Skip::BadPayload("subject"))?;
+                let unit = str_field(data, "unit").ok_or(Skip::BadPayload("unit"))?;
+                self.touch_subject(subject, str_field(data, "subject_title"));
+                let mut unit_fields = fields.clone();
+                unit_fields.remove("subject_title");
+                self.merge(col::UNITS, &format!("{subject}/{unit}"), &unit_fields);
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Canonical serialisation: one line per entry, `collection\tkey\tjson`,
+    /// in key order.
+    pub fn canonical(&self) -> String {
+        let mut out = String::new();
+        for (name, map) in &self.collections {
+            for (key, value) in map {
+                out.push_str(name);
+                out.push('\t');
+                out.push_str(key);
+                out.push('\t');
+                out.push_str(&value.to_string());
+                out.push('\n');
+            }
+        }
+        out
+    }
+
+    /// BLAKE3 hash of the canonical serialisation, as hex.
+    pub fn hash(&self) -> String {
+        blake3::hash(self.canonical().as_bytes())
+            .to_hex()
+            .to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn event(kind: &str, data: Value) -> Event {
+        Event {
+            v: 1,
+            id: "x".into(),
+            dev: "d-a".into(),
+            seq: 1,
+            hlc: "1762872000000-0000-d-a".into(),
+            ts: String::new(),
+            kind: kind.into(),
+            data,
+        }
+    }
+
+    #[test]
+    fn units_create_subjects_and_merge_fields() {
+        let mut s = State::default();
+        s.apply(&event(
+            "unit.created",
+            json!({"subject": "maths", "unit": "algebra", "title": "Algebra", "subject_title": "Mathematics"}),
+        ))
+        .unwrap();
+        s.apply(&event(
+            "unit.updated",
+            json!({"subject": "maths", "unit": "algebra", "summary": "Linear equations"}),
+        ))
+        .unwrap();
+        let unit = s.get(col::UNITS, "maths/algebra").unwrap();
+        assert_eq!(unit["title"], "Algebra");
+        assert_eq!(unit["summary"], "Linear equations");
+        assert_eq!(
+            s.get(col::SUBJECTS, "maths").unwrap()["title"],
+            "Mathematics"
+        );
+    }
+
+    #[test]
+    fn skips_unknown_and_newer_events() {
+        let mut s = State::default();
+        assert_eq!(
+            s.apply(&event("no.such", json!({}))),
+            Err(Skip::UnknownType)
+        );
+        let mut newer = event("setting.changed", json!({"key": "a", "value": 1}));
+        newer.v = 2;
+        assert_eq!(s.apply(&newer), Err(Skip::NewerVersion));
+        assert_eq!(s, State::default());
+        assert!(s.apply(&event("item.answered", json!({}))).is_ok());
+        assert_eq!(s, State::default());
+    }
+
+    #[test]
+    fn exam_removed_deletes_exam() {
+        let mut s = State::default();
+        s.apply(&event(
+            "exam.set",
+            json!({"id": "e1", "subject": "maths", "date": "2026-12-01"}),
+        ))
+        .unwrap();
+        s.apply(&event("exam.removed", json!({"id": "e1"})))
+            .unwrap();
+        assert!(s.get(col::EXAMS, "e1").is_none());
+        assert!(s.get(col::SUBJECTS, "maths").is_some());
+    }
+}
