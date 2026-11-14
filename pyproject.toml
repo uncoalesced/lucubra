@@ -17,7 +17,7 @@ classifiers = [
     "Programming Language :: Rust",
     "Topic :: Education",
 ]
-dependencies = []
+dependencies = ["pypdfium2>=4.30,<6"]
 
 [project.urls]
 Repository = "https://github.com/uncoalesced/lucubra"
