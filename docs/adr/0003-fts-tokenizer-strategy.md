@@ -35,3 +35,7 @@ The tests in `crates/lucubra-core/tests/fts5.rs` encode each row above and fail 
 - The trigram index adds substantial size for the text it covers. M2 measures it on the fixture corpus and may limit the trigram index to non-Latin text if the cost is high.
 - Removing joiners merges spellings that differ only in a joiner. That is the intended behaviour for search; stored source text is unchanged.
 - Queries shorter than three characters cannot use the trigram index and fall back to the primary index.
+
+## Amendment (M2, 2026-11-14)
+
+`normalize_for_fts` now applies Unicode NFC first, then folds the joiner encoding of the six Malayalam chillu letters (consonant, U+0D4D, U+200D) to the atomic letters U+0D7A to U+0D7F, then removes the characters listed above. NFD and NFC spellings, and joiner and atomic chillu spellings, index and search as the same word. The ingest index schema version was raised so existing indexes rebuild with the new rule.
