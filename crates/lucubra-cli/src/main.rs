@@ -182,7 +182,16 @@ fn run(command: Command) -> lucubra_core::Result<()> {
             use lucubra_ingest::pipeline::{Outcome, extract_pending};
             let ws = Workspace::open(&workspace_path(&target), &data_dir)?;
             print_scan(&lucubra_ingest::scan(&ws)?);
-            let report = extract_pending(&ws, None)?;
+            let mut worker = match lucubra_ingest::worker::python_supervisor(
+                lucubra_ingest::worker::DEFAULT_TIMEOUT,
+            ) {
+                Ok(sup) => Some(sup),
+                Err(reason) => {
+                    println!("worker unavailable: {reason}");
+                    None
+                }
+            };
+            let report = extract_pending(&ws, worker.as_mut())?;
             let mut waiting = 0;
             for p in &report.processed {
                 match &p.outcome {
@@ -207,7 +216,7 @@ fn run(command: Command) -> lucubra_core::Result<()> {
             );
             if waiting > 0 {
                 println!(
-                    "waiting for the Python worker: {waiting} files (PDF, Office, DXF, DICOM)"
+                    "waiting for a Python worker: {waiting} files; they are extracted on the next ingest with a worker"
                 );
             }
             for path in &report.missing {
