@@ -29,6 +29,10 @@ pub mod col {
     pub const UNITS: &str = "units";
     /// Preserved user edits by preserved path.
     pub const PRESERVED: &str = "preserved";
+    /// Files by BLAKE3 content hash (ADR 0011 section 6).
+    pub const FILES: &str = "files";
+    /// File locations by workspace-relative path.
+    pub const PATHS: &str = "paths";
 }
 
 /// Event types the M1 fold applies. Other known types are stored in the log
@@ -43,6 +47,9 @@ pub const FOLDED_TYPES: &[&str] = &[
     "exam.removed",
     "unit.created",
     "unit.updated",
+    "file.seen",
+    "file.extracted",
+    "file.failed",
 ];
 
 /// Why an event did not change state.
@@ -181,6 +188,36 @@ impl State {
                 unit_fields.remove("subject_title");
                 self.merge(col::UNITS, &format!("{subject}/{unit}"), &unit_fields);
             }
+            "file.seen" => {
+                let path = str_field(data, "path").ok_or(Skip::BadPayload("path"))?;
+                let hash = str_field(data, "hash").ok_or(Skip::BadPayload("hash"))?;
+                let mut location = fields.clone();
+                location.remove("path");
+                self.put(col::PATHS, path, Value::Object(location));
+                let mut file = Map::new();
+                file.insert("hash".into(), Value::String(hash.to_owned()));
+                if let Some(bytes) = data.get("bytes") {
+                    file.insert("bytes".into(), bytes.clone());
+                }
+                self.merge(col::FILES, hash, &file);
+            }
+            "file.extracted" | "file.failed" => {
+                let hash = str_field(data, "hash").ok_or(Skip::BadPayload("hash"))?;
+                let mut file = fields.clone();
+                file.remove("path");
+                if event.kind == "file.extracted" {
+                    // A later success clears an earlier failure.
+                    file.insert("status".into(), Value::String("extracted".into()));
+                    for stale in ["code", "detail", "tool"] {
+                        file.entry(stale).or_insert(Value::Null);
+                    }
+                } else {
+                    let outcome = str_field(data, "outcome").unwrap_or("failed");
+                    file.remove("outcome");
+                    file.insert("status".into(), Value::String(outcome.to_owned()));
+                }
+                self.merge(col::FILES, hash, &file);
+            }
             _ => {}
         }
         Ok(())
@@ -264,6 +301,39 @@ mod tests {
         assert_eq!(s, State::default());
         assert!(s.apply(&event("item.answered", json!({}))).is_ok());
         assert_eq!(s, State::default());
+    }
+
+    #[test]
+    fn file_events_track_paths_and_status() {
+        let mut s = State::default();
+        s.apply(&event(
+            "file.seen",
+            json!({"path": "inbox/a.pdf", "hash": "h1", "bytes": 10, "mtime_ms": 5, "online_only": false}),
+        ))
+        .unwrap();
+        s.apply(&event(
+            "file.seen",
+            json!({"path": "subjects/x/a.pdf", "hash": "h1", "bytes": 10, "mtime_ms": 6, "online_only": false}),
+        ))
+        .unwrap();
+        s.apply(&event(
+            "file.failed",
+            json!({"hash": "h1", "path": "inbox/a.pdf", "format": "pdf", "outcome": "failed", "code": "timeout", "detail": "slow"}),
+        ))
+        .unwrap();
+        assert_eq!(s.get(col::FILES, "h1").unwrap()["status"], "failed");
+        assert_eq!(s.get(col::FILES, "h1").unwrap()["code"], "timeout");
+        s.apply(&event(
+            "file.extracted",
+            json!({"hash": "h1", "format": "pdf", "chunks": 3, "needs_vision": []}),
+        ))
+        .unwrap();
+        let file = s.get(col::FILES, "h1").unwrap();
+        assert_eq!(file["status"], "extracted");
+        assert!(file.get("code").is_none());
+        assert_eq!(file["bytes"], 10);
+        assert_eq!(s.get(col::PATHS, "inbox/a.pdf").unwrap()["hash"], "h1");
+        assert_eq!(s.get(col::PATHS, "subjects/x/a.pdf").unwrap()["hash"], "h1");
     }
 
     #[test]
