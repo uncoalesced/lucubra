@@ -24,6 +24,7 @@ directories = "6"
 clap = { version = "4", features = ["derive"] }
 tempfile = "3"
 proptest = "1"
+csv = "1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
