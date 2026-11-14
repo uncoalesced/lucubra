@@ -7,7 +7,9 @@
 pub mod discover;
 pub mod hash;
 pub mod route;
+pub mod scan;
 
 pub use discover::{Discovered, Discovery, discover};
 pub use hash::{Hashed, hash_file};
 pub use route::{Extractor, Format, route, route_file};
+pub use scan::{ScanReport, Scanned, scan};
