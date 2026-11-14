@@ -14,6 +14,7 @@ serde_json.workspace = true
 ulid.workspace = true
 blake3.workspace = true
 directories.workspace = true
+unicode-normalization.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
