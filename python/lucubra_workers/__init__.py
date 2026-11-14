@@ -36,14 +36,16 @@ def handle(request: Any) -> dict[str, Any]:
 
 
 def _extract(request_id: Any, request: dict[str, Any]) -> dict[str, Any]:
-    from lucubra_workers.pdf import ExtractError, extract_pdf
+    from lucubra_workers.errors import ExtractError
+    from lucubra_workers.office import extract_docx, extract_pptx
+    from lucubra_workers.pdf import extract_pdf
 
     path = request.get("path")
     opts = request.get("opts") or {}
     fmt = opts.get("format") if isinstance(opts, dict) else None
     if not isinstance(path, str) or not path:
         return _error(request_id, "bad_request", "extract needs a path")
-    extractors = {"pdf": extract_pdf}
+    extractors = {"pdf": extract_pdf, "docx": extract_docx, "pptx": extract_pptx}
     extractor = extractors.get(fmt)
     if extractor is None:
         return _error(request_id, "unsupported", f"no worker extractor for {fmt!r}")
