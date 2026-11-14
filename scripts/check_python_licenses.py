@@ -23,6 +23,20 @@ ALLOWED = {
     "Zlib",
     "Unicode-3.0",
     "MPL-2.0",
+    "PSF-2.0",
+    "CC0-1.0",
+    "0BSD",
+}
+# Distributions whose metadata states the licence as free text, reviewed by
+# hand against the licence files in the wheel. The exact declared text is
+# pinned: if a release changes it, the check fails again until re-reviewed.
+REVIEWED = {
+    # pypdfium2 5.15.2 (2026-11-14): Apache-2.0 OR BSD-3-Clause for the
+    # bindings; the wheel's BUILD_LICENSES cover PDFium (BSD-3-Clause) and
+    # bundled permissive code (freetype FTL, ICU, libjpeg-turbo IJG and BSD,
+    # libpng, libtiff, zlib, lcms, openjpeg, harfbuzz, abseil, Boost). The
+    # musl and libgcc files apply only to Linux musl wheels.
+    "pypdfium2": "BSD-3-Clause, Apache-2.0, dependency licenses",
 }
 CLASSIFIERS = {
     "MIT License": "MIT",
@@ -97,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
     failures = 0
     for key in sorted(dependencies):
         licence = declared_licence(dependencies[key])
-        ok = licence is not None and expression_allowed(licence)
+        ok = licence is not None and (expression_allowed(licence) or REVIEWED.get(key) == licence)
         failures += not ok
         print(f"{'ok  ' if ok else 'FAIL'} {key}: {licence or 'no readable licence'}")
     status = "FAILED" if failures else "ok"
