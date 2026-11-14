@@ -50,6 +50,47 @@ enum Command {
     /// Find new and changed files, hash them and record them. Online-only
     /// cloud files are counted, never read.
     Scan(Target),
+    /// Scan, then extract and index every file not yet in this device's index.
+    Ingest(Target),
+    /// Search extracted text.
+    Search {
+        #[command(flatten)]
+        target: Target,
+        /// Words to find.
+        #[arg(required = true)]
+        query: Vec<String>,
+        /// Match inside words (three or more characters per term).
+        #[arg(long)]
+        substring: bool,
+        /// Maximum results.
+        #[arg(long, default_value_t = 10)]
+        limit: usize,
+    },
+}
+
+fn print_scan(report: &lucubra_ingest::ScanReport) {
+    println!(
+        "files: {} new or changed, {} unchanged",
+        report.logged(),
+        report.unchanged
+    );
+    for file in report.hashed.iter().filter(|f| f.logged) {
+        println!(
+            "  {} [{}] {}",
+            file.rel,
+            file.format.as_str(),
+            &file.hash[..8]
+        );
+    }
+    let (count, bytes) = (report.online_only.len(), report.online_only_bytes());
+    if count > 0 {
+        println!(
+            "online-only: {count} files, {bytes} bytes, not downloaded (reading them would download them)"
+        );
+    }
+    for problem in &report.problems {
+        println!("warning: {problem}");
+    }
 }
 
 fn workspace_path(target: &Target) -> PathBuf {
@@ -135,28 +176,77 @@ fn run(command: Command) -> lucubra_core::Result<()> {
         }
         Command::Scan(target) => {
             let ws = Workspace::open(&workspace_path(&target), &data_dir)?;
-            let report = lucubra_ingest::scan(&ws)?;
+            print_scan(&lucubra_ingest::scan(&ws)?);
+        }
+        Command::Ingest(target) => {
+            use lucubra_ingest::pipeline::{Outcome, extract_pending};
+            let ws = Workspace::open(&workspace_path(&target), &data_dir)?;
+            print_scan(&lucubra_ingest::scan(&ws)?);
+            let report = extract_pending(&ws, None)?;
+            let mut waiting = 0;
+            for p in &report.processed {
+                match &p.outcome {
+                    Outcome::Extracted { chunks, .. } => {
+                        println!(
+                            "  extracted {} [{}]: {chunks} chunks",
+                            p.path,
+                            p.format.as_str()
+                        );
+                    }
+                    Outcome::Failed { code, outcome } => {
+                        println!("  {outcome} {} [{}]: {code}", p.path, p.format.as_str());
+                    }
+                    Outcome::NoWorker => waiting += 1,
+                }
+            }
             println!(
-                "files: {} new or changed, {} unchanged",
-                report.logged(),
-                report.unchanged
+                "extraction: {} done now, {} already indexed, {} failed or pending earlier",
+                report.processed.len() - waiting,
+                report.up_to_date,
+                report.held
             );
-            for file in report.hashed.iter().filter(|f| f.logged) {
+            if waiting > 0 {
                 println!(
-                    "  {} [{}] {}",
-                    file.rel,
-                    file.format.as_str(),
-                    &file.hash[..8]
+                    "waiting for the Python worker: {waiting} files (PDF, Office, DXF, DICOM)"
                 );
             }
-            let (count, bytes) = (report.online_only.len(), report.online_only_bytes());
-            if count > 0 {
-                println!(
-                    "online-only: {count} files, {bytes} bytes, not downloaded (reading them would download them)"
-                );
+            for path in &report.missing {
+                println!("warning: no copy on disk: {path}");
             }
-            for problem in &report.problems {
-                println!("warning: {problem}");
+        }
+        Command::Search {
+            target,
+            query,
+            substring,
+            limit,
+        } => {
+            let ws = Workspace::open(&workspace_path(&target), &data_dir)?;
+            let index = lucubra_ingest::pipeline::open_index(&ws)?;
+            let query = query.join(" ");
+            let hits = if substring {
+                index.search_substring(&query, limit)?
+            } else {
+                index.search(&query, limit)?
+            };
+            let state = ws.replay()?.state;
+            let path_of = |hash: &str| {
+                state
+                    .collection(lucubra_core::state::col::PATHS)
+                    .find(|(_, v)| v.get("hash").and_then(|h| h.as_str()) == Some(hash))
+                    .map(|(p, _)| p.clone())
+                    .unwrap_or_default()
+            };
+            println!("results: {}", hits.len());
+            for hit in &hits {
+                let flat = hit.text.split_whitespace().collect::<Vec<_>>().join(" ");
+                let snippet: String = flat.chars().take(120).collect();
+                println!(
+                    "F:{}/{}  {}",
+                    &hit.hash[..8],
+                    hit.locator,
+                    path_of(&hit.hash)
+                );
+                println!("    {snippet}");
             }
         }
     }
