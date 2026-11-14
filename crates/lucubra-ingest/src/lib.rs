@@ -8,6 +8,7 @@ pub mod discover;
 pub mod hash;
 pub mod route;
 pub mod scan;
+pub mod worker;
 
 pub use discover::{Discovered, Discovery, discover};
 pub use hash::{Hashed, hash_file};
