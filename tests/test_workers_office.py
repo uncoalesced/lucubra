@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import io
+import struct
 import zipfile
 
 import pytest
@@ -115,3 +116,18 @@ def test_damaged_container_is_corrupt_through_handle(tmp_path):
     not_zip.write_bytes(b"not a zip at all")
     reply = handle({"id": "r2", "op": "extract", "path": str(not_zip), "opts": {"format": "pptx"}})
     assert reply["error"]["code"] == "corrupt"
+
+
+def test_lying_header_zip_bomb_is_limit_exceeded(tmp_path):
+    path = make_docx(tmp_path / "bomb-lying.docx")
+    payload = bytes(4 << 20)
+    _append(path, "word/media/lying.bin", payload, zipfile.ZIP_DEFLATED)
+    data = bytearray(open(path, "rb").read())
+    target = struct.pack("<I", len(payload))
+    lied = struct.pack("<I", 1024)
+    replaced = data.replace(target, lied)
+    assert replaced != data
+    open(path, "wb").write(replaced)
+    with pytest.raises(ExtractError) as err:
+        extract_docx(path)
+    assert err.value.code == "limit_exceeded"
