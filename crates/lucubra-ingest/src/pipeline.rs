@@ -172,6 +172,14 @@ pub fn from_worker(response: &Value) -> Extracted {
             .to_owned(),
         title: non_empty_str(meta.and_then(|m| m.get("title"))),
         subject: non_empty_str(meta.and_then(|m| m.get("subject"))),
+        pages: meta
+            .and_then(|m| m.get("pages"))
+            .and_then(Value::as_u64)
+            .and_then(|n| u32::try_from(n).ok()),
+        slides: meta
+            .and_then(|m| m.get("slides"))
+            .and_then(Value::as_u64)
+            .and_then(|n| u32::try_from(n).ok()),
         chunks,
         needs_vision,
         units_hint,
@@ -412,6 +420,12 @@ pub fn extract_pending_with_options(
                     }
                     if let Some(subject) = extracted.subject {
                         data["subject"] = Value::String(subject);
+                    }
+                    if let Some(pages) = extracted.pages {
+                        data["pages"] = json!(pages);
+                    }
+                    if let Some(slides) = extracted.slides {
+                        data["slides"] = json!(slides);
                     }
                     let ev = ws.append_observed("file.extracted", data, observed.as_ref())?;
                     observed = Hlc::parse(&ev.hlc).or(observed);
