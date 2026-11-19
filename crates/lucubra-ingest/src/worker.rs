@@ -39,7 +39,10 @@ impl WorkerSpec {
         WorkerSpec {
             program: python.into(),
             args: vec!["-I".into(), "-m".into(), "lucubra_workers".into()],
-            envs: vec![("PYTHONIOENCODING".into(), "utf-8".into())],
+            envs: vec![
+                ("PYTHONIOENCODING".into(), "utf-8".into()),
+                ("LUCUBRA_WORKER_MEM_MB".into(), "2048".into()),
+            ],
         }
     }
 }
