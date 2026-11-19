@@ -33,10 +33,12 @@ pub mod col {
     pub const FILES: &str = "files";
     /// File locations by workspace-relative path.
     pub const PATHS: &str = "paths";
+    /// Vision and handwriting transcripts by `<hash>/p:<n>` or `<hash>/img`.
+    pub const TRANSCRIPTS: &str = "transcripts";
 }
 
-/// Event types the M1 fold applies. Other known types are stored in the log
-/// and folded by later milestones.
+/// Event types the engine folds into state. Other known types are stored in
+/// the log and folded by later milestones.
 pub const FOLDED_TYPES: &[&str] = &[
     "workspace.initialized",
     "setting.changed",
@@ -50,6 +52,8 @@ pub const FOLDED_TYPES: &[&str] = &[
     "file.seen",
     "file.extracted",
     "file.failed",
+    "transcript.saved",
+    "transcript.verified",
 ];
 
 /// Why an event did not change state.
@@ -74,6 +78,13 @@ fn str_field<'a>(data: &'a Value, name: &str) -> Option<&'a str> {
     data.get(name)
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())
+}
+
+fn transcript_key(hash: &str, data: &Value) -> String {
+    match data.get("page").and_then(Value::as_u64) {
+        Some(page) => format!("{hash}/p:{page}"),
+        None => format!("{hash}/img"),
+    }
 }
 
 impl State {
@@ -218,6 +229,20 @@ impl State {
                 }
                 self.merge(col::FILES, hash, &file);
             }
+            "transcript.saved" => {
+                let hash = str_field(data, "hash").ok_or(Skip::BadPayload("hash"))?;
+                let key = transcript_key(hash, data);
+                let mut entry = fields.clone();
+                entry.entry("verified").or_insert(Value::Bool(false));
+                self.merge(col::TRANSCRIPTS, &key, &entry);
+            }
+            "transcript.verified" => {
+                let hash = str_field(data, "hash").ok_or(Skip::BadPayload("hash"))?;
+                let key = transcript_key(hash, data);
+                let mut entry = fields.clone();
+                entry.insert("verified".into(), Value::Bool(true));
+                self.merge(col::TRANSCRIPTS, &key, &entry);
+            }
             _ => {}
         }
         Ok(())
@@ -348,5 +373,55 @@ mod tests {
             .unwrap();
         assert!(s.get(col::EXAMS, "e1").is_none());
         assert!(s.get(col::SUBJECTS, "maths").is_some());
+    }
+
+    #[test]
+    fn transcript_events_track_verification_and_file_metadata() {
+        let mut s = State::default();
+        s.apply(&event(
+            "file.extracted",
+            json!({
+                "hash": "h1",
+                "format": "pdf",
+                "chunks": 2,
+                "needs_vision": [1],
+                "title": "STAT201 Lecture 1",
+                "subject": "Statistics"
+            }),
+        ))
+        .unwrap();
+        let file = s.get(col::FILES, "h1").unwrap();
+        assert_eq!(file["title"], "STAT201 Lecture 1");
+        assert_eq!(file["subject"], "Statistics");
+
+        s.apply(&event(
+            "transcript.saved",
+            json!({"hash": "h1", "page": 1, "path": "notes/lec.pdf.p1.transcript.md"}),
+        ))
+        .unwrap();
+        s.apply(&event(
+            "transcript.saved",
+            json!({"hash": "h2", "path": "inbox/photo.png.transcript.md", "verified": false}),
+        ))
+        .unwrap();
+        assert_eq!(
+            s.get(col::TRANSCRIPTS, "h1/p:1").unwrap()["verified"],
+            false
+        );
+        assert_eq!(
+            s.get(col::TRANSCRIPTS, "h2/img").unwrap()["verified"],
+            false
+        );
+
+        s.apply(&event("transcript.verified", json!({"hash": "h1", "page": 1})))
+            .unwrap();
+        assert_eq!(
+            s.get(col::TRANSCRIPTS, "h1/p:1").unwrap()["verified"],
+            true
+        );
+        assert_eq!(
+            s.get(col::TRANSCRIPTS, "h1/p:1").unwrap()["path"],
+            "notes/lec.pdf.p1.transcript.md"
+        );
     }
 }
