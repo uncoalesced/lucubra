@@ -36,6 +36,10 @@ pub struct Chunk {
 pub struct Extracted {
     /// Extractor name and version.
     pub extractor: String,
+    /// Document title metadata when present.
+    pub title: Option<String>,
+    /// Document subject metadata when present.
+    pub subject: Option<String>,
     /// Chunks in document order.
     pub chunks: Vec<Chunk>,
     /// Pages, slides or images needing vision (1-based).
