@@ -91,6 +91,8 @@ enum Command {
     },
     /// Watch the workspace and scan + extract changed files.
     Watch(Target),
+    /// Start the MCP server over stdio.
+    Mcp(Target),
 }
 
 fn print_scan(report: &lucubra_ingest::ScanReport) {
@@ -373,8 +375,45 @@ fn run(command: Command) -> lucubra_core::Result<()> {
                 println!("    {snippet}");
             }
         }
+        Command::Mcp(target) => {
+            init_mcp_stderr_tracing();
+            let ws_root = workspace_path(&target);
+            let options = lucubra_mcp::ServerOptions {
+                workspace_root: ws_root,
+                data_dir,
+                read_only_tools: false,
+            };
+            let server = lucubra_mcp::LucubraServer::open(&options)?;
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| lucubra_core::Error::io("building async runtime", e))?;
+            let ct = tokio_util::sync::CancellationToken::new();
+            let signal_ct = ct.clone();
+            rt.block_on(async move {
+                tokio::spawn(async move {
+                    if tokio::signal::ctrl_c().await.is_ok() {
+                        signal_ct.cancel();
+                    }
+                });
+                lucubra_mcp::serve_stdio(server, ct).await
+            })
+            .map_err(|e| lucubra_core::Error::Invalid(format!("MCP server stopped: {e}")))?;
+        }
     }
     Ok(())
+}
+
+fn init_mcp_stderr_tracing() {
+    use tracing_subscriber::EnvFilter;
+    let filter = EnvFilter::try_from_env("LUCUBRA_LOG")
+        .or_else(|_| EnvFilter::try_from_default_env())
+        .unwrap_or_else(|_| EnvFilter::new("warn"));
+    let _ = tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_ansi(false)
+        .with_env_filter(filter)
+        .try_init();
 }
 
 fn main() -> ExitCode {
