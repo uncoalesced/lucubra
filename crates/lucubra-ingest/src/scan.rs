@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use lucubra_core::hlc::Hlc;
 use lucubra_core::projection::write_atomic;
 use lucubra_core::state::col;
 use lucubra_core::{Error, Result, Workspace};
@@ -19,10 +20,17 @@ use serde_json::{Value, json};
 
 use crate::discover::discover;
 use crate::hash::hash_file;
-use crate::route::{Format, route_file};
+use crate::route::{Format, route, route_file};
 
 /// Stat cache file name inside the workspace's app-data directory.
 pub const STAT_CACHE: &str = "scan-stat.json";
+/// Flush stat cache every N newly-hashed files so large scans resume cleanly.
+const STAT_FLUSH_INTERVAL: usize = 200;
+
+/// Synthetic `files` collection key for an online-only placeholder path.
+pub fn online_only_key(rel: &str) -> String {
+    format!("online-only:{}", blake3::hash(rel.as_bytes()).to_hex())
+}
 
 /// A file hashed during this scan.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,7 +118,9 @@ fn save_stats(path: &Path, stats: &BTreeMap<String, Stat>) -> Result<()> {
 
 /// Scans the workspace once.
 pub fn scan(ws: &Workspace) -> Result<ScanReport> {
-    let state = ws.replay()?.state;
+    let replay = ws.replay()?;
+    let state = replay.state;
+    let mut observed = replay.max_hlc;
     let cache_dir = ws.cache_dir()?;
     fs::create_dir_all(&cache_dir)
         .map_err(|e| Error::io(format!("creating {}", cache_dir.display()), e))?;
@@ -123,8 +133,32 @@ pub fn scan(ws: &Workspace) -> Result<ScanReport> {
         problems: found.problems,
         ..ScanReport::default()
     };
+    let mut hashed_since_flush = 0usize;
+
     for file in found.files {
         if file.online_only {
+            let key = online_only_key(&file.rel);
+            let already_pending = state.get(col::FILES, &key).is_some_and(|entry| {
+                entry.get("status").and_then(Value::as_str) == Some("pending")
+                    && entry.get("code").and_then(Value::as_str) == Some("online_only")
+            });
+            if !already_pending {
+                // Route by extension only so zero bytes of the placeholder are read.
+                let format = route(&file.abs, &[]);
+                let ev = ws.append_observed(
+                    "file.failed",
+                    json!({
+                        "hash": key,
+                        "path": file.rel,
+                        "format": format.as_str(),
+                        "outcome": "pending",
+                        "code": "online_only",
+                        "detail": "online-only cloud placeholder; not downloaded",
+                    }),
+                    observed.as_ref(),
+                )?;
+                observed = Hlc::parse(&ev.hlc).or(observed);
+            }
             report.online_only.push((file.rel, file.bytes));
             continue;
         }
@@ -152,7 +186,7 @@ pub fn scan(ws: &Workspace) -> Result<ScanReport> {
         let format = route_file(&file.abs).unwrap_or(Format::Unknown);
         let logged = logged_hash.as_deref() != Some(hashed.hash.as_str());
         if logged {
-            ws.append(
+            let ev = ws.append_observed(
                 "file.seen",
                 json!({
                     "path": file.rel,
@@ -161,7 +195,9 @@ pub fn scan(ws: &Workspace) -> Result<ScanReport> {
                     "mtime_ms": file.mtime_ms,
                     "online_only": false,
                 }),
+                observed.as_ref(),
             )?;
+            observed = Hlc::parse(&ev.hlc).or(observed);
         }
         stats.insert(
             file.rel.clone(),
@@ -179,6 +215,11 @@ pub fn scan(ws: &Workspace) -> Result<ScanReport> {
             format,
             logged,
         });
+        hashed_since_flush += 1;
+        if hashed_since_flush >= STAT_FLUSH_INTERVAL {
+            save_stats(&stat_path, &stats)?;
+            hashed_since_flush = 0;
+        }
     }
     save_stats(&stat_path, &stats)?;
     Ok(report)
