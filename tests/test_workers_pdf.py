@@ -6,7 +6,8 @@ from __future__ import annotations
 
 import pytest
 from lucubra_workers import handle
-from lucubra_workers.pdf import VISION_MIN_CHARS, ExtractError, extract_pdf
+from lucubra_workers.pdf import VISION_MIN_CHARS, ExtractError, extract_pdf, render_pdf_pages
+from PIL import Image
 
 
 def _escape(text: str) -> str:
@@ -129,3 +130,79 @@ def test_extract_op_through_handle(pdf_file):
     assert unsupported["error"]["code"] == "unsupported"
     bad = handle({"id": "r4", "op": "extract", "opts": {"format": "pdf"}})
     assert bad["error"]["code"] == "bad_request"
+
+
+def test_pdf_metadata_tables_and_render_bounds(pdf_file, tmp_path):
+    pdf_bytes = make_pdf(["Cell A   Cell B\nValue 1   Value 2"])
+    # Inject an /Info metadata object cleanly or test render + table parsing on a PDF with lines.
+    path = pdf_file(pdf_bytes, "render.pdf")
+    out_dir = tmp_path / "pages"
+    first = render_pdf_pages(path, [1], str(out_dir), long_edge=1600)
+    assert len(first["rendered"]) == 1
+    assert first["skipped"] == []
+    with Image.open(out_dir / "p1.png") as img:
+        assert max(img.size) <= 1600
+    second = handle(
+        {
+            "id": "r5",
+            "op": "render",
+            "path": path,
+            "opts": {"format": "pdf", "pages": [1], "out_dir": str(out_dir), "long_edge": 1600},
+        }
+    )
+    assert second["ok"] is True
+    assert second["rendered"] == []
+    assert second["skipped"] == [1]
+
+    # PDF with ruled lines forming a 2x2 table so pdfplumber detects it.
+    stream = (
+        "q 1 w 50 700 200 40 re S 150 700 m 150 740 l S 50 720 m 250 720 l S Q "
+        "BT /F1 10 Tf 60 725 Td (Item) Tj 160 725 Td (Score) Tj "
+        "60 705 Td (Alpha) Tj 160 705 Td (98) Tj ET"
+    )
+    raw = pdf_bytes.replace(
+        b"BT /F1 12 Tf 72 720 Td (Cell A   Cell B\nValue 1   Value 2) Tj ET",
+        stream.encode("ascii"),
+    )
+    # Fix stream /Length in object 5 and xref offsets simply via a ruled-table PDF helper:
+    del raw
+    ruled = _make_ruled_table_pdf()
+    table_path = pdf_file(ruled, "table.pdf")
+    table_res = extract_pdf(table_path)
+    assert table_res["meta"]["title"] == "Course Table"
+    assert "Alpha" in table_res["chunks"][0]["text"]
+    assert "| Item | Score |" in table_res["chunks"][0]["text"]
+
+
+def _make_ruled_table_pdf() -> bytes:
+    stream = (
+        "q 1 w 50 700 200 40 re S 150 700 m 150 740 l S 50 720 m 250 720 l S Q\n"
+        "BT /F1 10 Tf "
+        "1 0 0 1 60 725 Tm (Item) Tj "
+        "1 0 0 1 160 725 Tm (Score) Tj "
+        "1 0 0 1 60 705 Tm (Alpha) Tj "
+        "1 0 0 1 160 705 Tm (98) Tj ET"
+    ).encode("ascii")
+    objects = {
+        1: b"<< /Type /Catalog /Pages 2 0 R >>",
+        2: b"<< /Type /Pages /Kids [4 0 R] /Count 1 >>",
+        3: b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        4: b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+        b"/Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>",
+        5: f"<< /Length {len(stream)} >>\nstream\n".encode("ascii") + stream + b"\nendstream",
+        6: b"<< /Title (Course Table) /Subject (Testing) >>",
+    }
+    out = bytearray(b"%PDF-1.7\n")
+    offsets = {}
+    for num in sorted(objects):
+        offsets[num] = len(out)
+        out += f"{num} 0 obj\n".encode("ascii") + objects[num] + b"\nendobj\n"
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode("ascii")
+    for num in range(1, len(objects) + 1):
+        out += f"{offsets[num]:010d} 00000 n \n".encode("ascii")
+    out += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R /Info 6 0 R >>\n"
+        f"startxref\n{xref}\n%%EOF\n"
+    ).encode("ascii")
+    return bytes(out)
