@@ -1,0 +1,52 @@
+{
+  "subjects": [
+    {
+      "slug": "stat201",
+      "title": "Probability and Inference",
+      "course_code": "STAT201",
+      "keywords": [
+        "bayes",
+        "variance",
+        "poisson",
+        "estimator",
+        "quantile"
+      ]
+    },
+    {
+      "slug": "cs302",
+      "title": "Algorithms and Complexity",
+      "course_code": "CS302",
+      "keywords": [
+        "dijkstra",
+        "amortized",
+        "recurrence",
+        "bipartite",
+        "npcomplete"
+      ]
+    },
+    {
+      "slug": "econ104",
+      "title": "Macroeconomic Policy",
+      "course_code": "ECON104",
+      "keywords": [
+        "inflation",
+        "keynesian",
+        "liquidity",
+        "multiplier",
+        "gdp"
+      ]
+    },
+    {
+      "slug": "chem210",
+      "title": "Organic Reaction Kinetics",
+      "course_code": "CHEM210",
+      "keywords": [
+        "nucleophile",
+        "enantiomer",
+        "enthalpy",
+        "carbocation",
+        "esterification"
+      ]
+    }
+  ]
+}
