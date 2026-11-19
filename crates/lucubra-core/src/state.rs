@@ -35,6 +35,8 @@ pub mod col {
     pub const PATHS: &str = "paths";
     /// Vision and handwriting transcripts by `<hash>/p:<n>` or `<hash>/img`.
     pub const TRANSCRIPTS: &str = "transcripts";
+    /// Study sessions by session id (and unattached progress under `_unattached`).
+    pub const SESSIONS: &str = "sessions";
 }
 
 /// Event types the engine folds into state. Other known types are stored in
@@ -47,6 +49,8 @@ pub const FOLDED_TYPES: &[&str] = &[
     "profile.skipped",
     "exam.set",
     "exam.removed",
+    "subject.created",
+    "subject.updated",
     "unit.created",
     "unit.updated",
     "file.seen",
@@ -54,6 +58,10 @@ pub const FOLDED_TYPES: &[&str] = &[
     "file.failed",
     "transcript.saved",
     "transcript.verified",
+    "session.started",
+    "step.completed",
+    "session.ended",
+    "handoff.written",
 ];
 
 /// Why an event did not change state.
@@ -191,6 +199,19 @@ impl State {
                 let id = str_field(data, "id").ok_or(Skip::BadPayload("id"))?;
                 self.remove(col::EXAMS, id);
             }
+            "subject.created" | "subject.updated" => {
+                let subject = str_field(data, "subject")
+                    .or_else(|| str_field(data, "slug"))
+                    .ok_or(Skip::BadPayload("subject"))?;
+                let mut subject_fields = fields.clone();
+                subject_fields.insert("slug".into(), Value::String(subject.to_owned()));
+                if !subject_fields.contains_key("title")
+                    && let Some(title) = str_field(data, "subject_title")
+                {
+                    subject_fields.insert("title".into(), Value::String(title.to_owned()));
+                }
+                self.merge(col::SUBJECTS, subject, &subject_fields);
+            }
             "unit.created" | "unit.updated" => {
                 let subject = str_field(data, "subject").ok_or(Skip::BadPayload("subject"))?;
                 let unit = str_field(data, "unit").ok_or(Skip::BadPayload("unit"))?;
@@ -242,6 +263,81 @@ impl State {
                 let mut entry = fields.clone();
                 entry.insert("verified".into(), Value::Bool(true));
                 self.merge(col::TRANSCRIPTS, &key, &entry);
+            }
+            "session.started" => {
+                let sid = str_field(data, "session_id").ok_or(Skip::BadPayload("session_id"))?;
+                let mut entry = fields.clone();
+                entry.insert("session_id".into(), Value::String(sid.to_owned()));
+                entry.insert("status".into(), Value::String("active".into()));
+                entry.insert("started_hlc".into(), Value::String(event.hlc.clone()));
+                if !event.ts.is_empty() {
+                    entry.insert("started_ts".into(), Value::String(event.ts.clone()));
+                }
+                if self
+                    .get(col::SESSIONS, sid)
+                    .and_then(|v| v.get("logged_minutes"))
+                    .is_none()
+                {
+                    entry.insert("logged_minutes".into(), Value::from(0u64));
+                }
+                if self
+                    .get(col::SESSIONS, sid)
+                    .and_then(|v| v.get("steps_count"))
+                    .is_none()
+                {
+                    entry.insert("steps_count".into(), Value::from(0u64));
+                }
+                self.merge(col::SESSIONS, sid, &entry);
+            }
+            "step.completed" => {
+                let sid = str_field(data, "session_id").unwrap_or("_unattached");
+                let minutes = data.get("minutes").and_then(Value::as_u64).unwrap_or(0);
+                let existing = self.get(col::SESSIONS, sid);
+                let prev_minutes = existing
+                    .and_then(|v| v.get("logged_minutes"))
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+                let prev_steps = existing
+                    .and_then(|v| v.get("steps_count"))
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+                let mut entry = Map::new();
+                entry.insert("logged_minutes".into(), Value::from(prev_minutes + minutes));
+                entry.insert("steps_count".into(), Value::from(prev_steps + 1));
+                if let Some(unit) = str_field(data, "unit") {
+                    entry.insert("last_unit".into(), Value::String(unit.to_owned()));
+                }
+                if let Some(style) = str_field(data, "style") {
+                    entry.insert("last_style".into(), Value::String(style.to_owned()));
+                    entry.insert("style".into(), Value::String(style.to_owned()));
+                }
+                if let Some(kind) = str_field(data, "kind") {
+                    entry.insert("last_kind".into(), Value::String(kind.to_owned()));
+                }
+                self.merge(col::SESSIONS, sid, &entry);
+            }
+            "session.ended" => {
+                let sid = str_field(data, "session_id").ok_or(Skip::BadPayload("session_id"))?;
+                let mut entry = fields.clone();
+                entry.insert("status".into(), Value::String("ended".into()));
+                entry.insert("ended_hlc".into(), Value::String(event.hlc.clone()));
+                if !event.ts.is_empty() {
+                    entry.insert("ended_ts".into(), Value::String(event.ts.clone()));
+                }
+                self.merge(col::SESSIONS, sid, &entry);
+            }
+            "handoff.written" => {
+                let sid = str_field(data, "session_id").ok_or(Skip::BadPayload("session_id"))?;
+                let mut entry = Map::new();
+                if let Some(summary) = str_field(data, "summary") {
+                    entry.insert("summary".into(), Value::String(summary.to_owned()));
+                }
+                if let Some(path) = str_field(data, "path") {
+                    entry.insert("handoff_path".into(), Value::String(path.to_owned()));
+                }
+                if !entry.is_empty() {
+                    self.merge(col::SESSIONS, sid, &entry);
+                }
             }
             _ => {}
         }
@@ -423,5 +519,49 @@ mod tests {
             s.get(col::TRANSCRIPTS, "h1/p:1").unwrap()["path"],
             "notes/lec.pdf.p1.transcript.md"
         );
+    }
+
+    #[test]
+    fn subject_and_session_events_fold_deterministically() {
+        let mut s = State::default();
+        s.apply(&event(
+            "subject.created",
+            json!({"subject": "stats", "title": "Statistics"}),
+        ))
+        .unwrap();
+        s.apply(&event(
+            "subject.updated",
+            json!({"subject": "stats", "course_code": "STAT201"}),
+        ))
+        .unwrap();
+        let subj = s.get(col::SUBJECTS, "stats").unwrap();
+        assert_eq!(subj["title"], "Statistics");
+        assert_eq!(subj["course_code"], "STAT201");
+
+        s.apply(&event(
+            "session.started",
+            json!({"session_id": "S1", "units": ["stats/u1"], "style": "tutor"}),
+        ))
+        .unwrap();
+        s.apply(&event(
+            "step.completed",
+            json!({"session_id": "S1", "kind": "step", "unit": "stats/u1", "minutes": 25}),
+        ))
+        .unwrap();
+        s.apply(&event(
+            "handoff.written",
+            json!({"session_id": "S1", "summary": "Reviewed variance."}),
+        ))
+        .unwrap();
+        s.apply(&event(
+            "session.ended",
+            json!({"session_id": "S1", "reason": "user"}),
+        ))
+        .unwrap();
+        let sess = s.get(col::SESSIONS, "S1").unwrap();
+        assert_eq!(sess["status"], "ended");
+        assert_eq!(sess["logged_minutes"], 25);
+        assert_eq!(sess["steps_count"], 1);
+        assert_eq!(sess["summary"], "Reviewed variance.");
     }
 }
