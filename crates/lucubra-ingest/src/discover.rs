@@ -68,7 +68,7 @@ pub fn is_skipped(rel: &str) -> bool {
     if is_projection_path(rel) || GENERATED.contains(&rel) {
         return true;
     }
-    rel.ends_with(".transcript.md") && rel.split('/').any(|p| p == "notes")
+    rel.ends_with(".transcript.md")
 }
 
 #[cfg(windows)]
@@ -185,6 +185,7 @@ mod tests {
             "subjects/maths/algebra/sources/b.pdf",
             "subjects/maths/algebra/notes/mine.md",
             "subjects/maths/algebra/notes/b.pdf.p1.transcript.md",
+            "inbox/photo-notes.png.transcript.md",
             "subjects/maths/algebra/UNIT.md",
             "subjects/maths/agents_maths.md",
             "AGENTS.md",
