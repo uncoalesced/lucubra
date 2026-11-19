@@ -9,10 +9,13 @@
 
 use std::collections::BTreeMap;
 use std::fs::{self, File};
-use std::io::BufReader;
+use std::io::{BufReader, Read};
 use std::path::Path;
 
 use calamine::{Data, Ods, Range, Reader, Xls, Xlsx, open_workbook};
+use quick_xml::Reader as XmlReader;
+use quick_xml::events::Event as XmlEvent;
+use zip::ZipArchive;
 
 use crate::limits::MAX_FILE_BYTES;
 use crate::native::{CHUNK_CHARS, Chunk, Extracted, Failure};
@@ -80,6 +83,17 @@ fn map_open_err(err: impl std::fmt::Display) -> Failure {
     }
 }
 
+fn normalize_formula(raw: &str) -> String {
+    let trimmed = raw.trim();
+    let no_of = trimmed.strip_prefix("of:").unwrap_or(trimmed).trim();
+    let no_eq = no_of.strip_prefix('=').unwrap_or(no_of).trim();
+    if no_eq.contains("[.") {
+        no_eq.replace("[.", "").replace(":.", ":").replace(']', "")
+    } else {
+        no_eq.to_owned()
+    }
+}
+
 fn collect_formulas(range: &Range<String>) -> BTreeMap<(u32, u32), String> {
     let mut out = BTreeMap::new();
     let (r0, c0) = range.start().unwrap_or((0, 0));
@@ -87,8 +101,7 @@ fn collect_formulas(range: &Range<String>) -> BTreeMap<(u32, u32), String> {
         for (dc, text) in row.iter().enumerate() {
             let trimmed = text.trim();
             if !trimmed.is_empty() {
-                let normalized = trimmed.strip_prefix('=').unwrap_or(trimmed).to_owned();
-                out.insert((r0 + dr as u32, c0 + dc as u32), normalized);
+                out.insert((r0 + dr as u32, c0 + dc as u32), normalize_formula(trimmed));
             }
         }
     }
@@ -108,21 +121,13 @@ fn collect_values(range: &Range<Data>) -> BTreeMap<(u32, u32), String> {
     out
 }
 
-fn push_sheet<R: Reader<BufReader<File>>>(
-    wb: &mut R,
+fn push_sheet_maps(
     sheet: &str,
+    values: &BTreeMap<(u32, u32), String>,
+    formulas: &BTreeMap<(u32, u32), String>,
     named_ranges: &[(String, String)],
     out: &mut Extracted,
 ) {
-    let values = wb
-        .worksheet_range(sheet)
-        .map(|r| collect_values(&r))
-        .unwrap_or_default();
-    let formulas = wb
-        .worksheet_formula(sheet)
-        .map(|r| collect_formulas(&r))
-        .unwrap_or_default();
-
     let mut coords: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
     let mut min_col = u32::MAX;
     let mut max_col = 0u32;
@@ -226,6 +231,23 @@ fn push_sheet<R: Reader<BufReader<File>>>(
     }
 }
 
+fn push_sheet<R: Reader<BufReader<File>>>(
+    wb: &mut R,
+    sheet: &str,
+    named_ranges: &[(String, String)],
+    out: &mut Extracted,
+) {
+    let values = wb
+        .worksheet_range(sheet)
+        .map(|r| collect_values(&r))
+        .unwrap_or_default();
+    let formulas = wb
+        .worksheet_formula(sheet)
+        .map(|r| collect_formulas(&r))
+        .unwrap_or_default();
+    push_sheet_maps(sheet, &values, &formulas, named_ranges, out);
+}
+
 fn read_all<R: Reader<BufReader<File>>>(mut wb: R) -> Extracted {
     let mut out = Extracted::default();
     let sheets = wb.sheet_names();
@@ -235,6 +257,159 @@ fn read_all<R: Reader<BufReader<File>>>(mut wb: R) -> Extracted {
         push_sheet(&mut wb, sheet, &named, &mut out);
     }
     out
+}
+
+fn xml_attr(e: &quick_xml::events::BytesStart<'_>, target: &str) -> Option<String> {
+    for attr in e.attributes().flatten() {
+        let full = attr.key.as_ref();
+        let local = full.rsplit(':').next().unwrap_or(full);
+        if full == target || local == target {
+            return attr
+                .normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                .ok()
+                .map(|s| s.into_owned());
+        }
+    }
+    None
+}
+
+/// Fallback ODS reader tolerating indented whitespace between `<table:table-row>`
+/// and `<table:table-cell>`, which `calamine` 0.38 rejects.
+fn extract_ods_xml_fallback(path: &Path) -> Result<Extracted, Failure> {
+    let file = File::open(path).map_err(|e| fail("corrupt", e.to_string()))?;
+    let mut archive =
+        ZipArchive::new(BufReader::new(file)).map_err(|e| fail("corrupt", e.to_string()))?;
+    let mut entry = archive
+        .by_name("content.xml")
+        .map_err(|e| fail("corrupt", format!("missing ODS content.xml: {e}")))?;
+    let mut xml = String::new();
+    entry
+        .read_to_string(&mut xml)
+        .map_err(|e| fail("corrupt", format!("reading ODS content.xml: {e}")))?;
+
+    let mut reader = XmlReader::from_str(&xml);
+    reader.config_mut().trim_text(true);
+
+    let mut out = Extracted::default();
+    let mut current_sheet: Option<String> = None;
+    let mut values: BTreeMap<(u32, u32), String> = BTreeMap::new();
+    let mut formulas: BTreeMap<(u32, u32), String> = BTreeMap::new();
+    let mut row_idx: u32 = 0;
+    let mut col_idx: u32 = 0;
+    let mut in_cell = false;
+    let mut in_text_p = false;
+    let mut cell_text = String::new();
+    let mut cell_attr_val: Option<String> = None;
+    let mut cell_formula: Option<String> = None;
+    let mut cell_repeats: u32 = 1;
+
+    loop {
+        match reader.read_event() {
+            Ok(XmlEvent::Start(e)) => match e.local_name().as_ref() {
+                "table" => {
+                    current_sheet =
+                        Some(xml_attr(&e, "table:name").unwrap_or_else(|| "Sheet".to_owned()));
+                    values.clear();
+                    formulas.clear();
+                    row_idx = 0;
+                }
+                "table-row" if current_sheet.is_some() => {
+                    col_idx = 0;
+                }
+                "table-cell" | "covered-table-cell" if current_sheet.is_some() => {
+                    in_cell = true;
+                    cell_text.clear();
+                    cell_attr_val = xml_attr(&e, "office:value")
+                        .or_else(|| xml_attr(&e, "office:boolean-value"))
+                        .or_else(|| xml_attr(&e, "office:date-value"));
+                    cell_formula = xml_attr(&e, "table:formula").map(|f| normalize_formula(&f));
+                    cell_repeats = xml_attr(&e, "table:number-columns-repeated")
+                        .and_then(|s| s.parse::<u32>().ok())
+                        .unwrap_or(1)
+                        .min(64);
+                }
+                "p" if in_cell => {
+                    in_text_p = true;
+                }
+                _ => {}
+            },
+            Ok(XmlEvent::Empty(e)) => {
+                if matches!(e.local_name().as_ref(), "table-cell" | "covered-table-cell")
+                    && current_sheet.is_some()
+                {
+                    let val = xml_attr(&e, "office:value")
+                        .or_else(|| xml_attr(&e, "office:boolean-value"))
+                        .or_else(|| xml_attr(&e, "office:date-value"));
+                    let form = xml_attr(&e, "table:formula").map(|f| normalize_formula(&f));
+                    let repeats = xml_attr(&e, "table:number-columns-repeated")
+                        .and_then(|s| s.parse::<u32>().ok())
+                        .unwrap_or(1)
+                        .min(64);
+                    if val.is_some() || form.is_some() {
+                        for rep in 0..repeats {
+                            if let Some(ref v) = val {
+                                values.insert((row_idx, col_idx + rep), v.clone());
+                            }
+                            if let Some(ref f) = form {
+                                formulas.insert((row_idx, col_idx + rep), f.clone());
+                            }
+                        }
+                    }
+                    col_idx = col_idx.saturating_add(repeats);
+                }
+            }
+            Ok(XmlEvent::Text(t)) if in_text_p => {
+                let s = t.xml10_content();
+                if !cell_text.is_empty() {
+                    cell_text.push(' ');
+                }
+                cell_text.push_str(&s);
+            }
+            Ok(XmlEvent::End(e)) => match e.local_name().as_ref() {
+                "p" => in_text_p = false,
+                "table-cell" | "covered-table-cell" if in_cell => {
+                    in_cell = false;
+                    in_text_p = false;
+                    let val = cell_attr_val
+                        .take()
+                        .filter(|s| !s.trim().is_empty())
+                        .or_else(|| {
+                            let t = cell_text.trim();
+                            (!t.is_empty()).then(|| t.to_owned())
+                        });
+                    let form = cell_formula.take();
+                    if val.is_some() || form.is_some() {
+                        for rep in 0..cell_repeats {
+                            if let Some(ref v) = val {
+                                values.insert((row_idx, col_idx + rep), v.clone());
+                            }
+                            if let Some(ref f) = form {
+                                formulas.insert((row_idx, col_idx + rep), f.clone());
+                            }
+                        }
+                    }
+                    col_idx = col_idx.saturating_add(cell_repeats);
+                }
+                "table-row" if current_sheet.is_some() => {
+                    row_idx = row_idx.saturating_add(1);
+                }
+                "table" => {
+                    if let Some(sheet) = current_sheet.take() {
+                        out.units_hint.push(sheet.clone());
+                        push_sheet_maps(&sheet, &values, &formulas, &[], &mut out);
+                    }
+                }
+                _ => {}
+            },
+            Ok(XmlEvent::Eof) => break,
+            Err(e) => return Err(fail("corrupt", format!("invalid ODS XML: {e}"))),
+            _ => {}
+        }
+    }
+    if out.chunks.is_empty() {
+        return Err(fail("corrupt", "ODS workbook contains no sheets"));
+    }
+    Ok(out)
 }
 
 /// Extracts an `xlsx`, `xlsm`, `xls`, or `ods` workbook.
@@ -256,7 +431,10 @@ pub fn extract(path: &Path, format: Format) -> Result<Extracted, Failure> {
             read_all(open_workbook::<Xlsx<_>, _>(path).map_err(map_open_err)?)
         }
         Format::Xls => read_all(open_workbook::<Xls<_>, _>(path).map_err(map_open_err)?),
-        Format::Ods => read_all(open_workbook::<Ods<_>, _>(path).map_err(map_open_err)?),
+        Format::Ods => match open_workbook::<Ods<_>, _>(path) {
+            Ok(wb) => read_all(wb),
+            Err(_) => extract_ods_xml_fallback(path)?,
+        },
         _ => return Err(fail("unsupported", "not a spreadsheet format")),
     };
     Ok(extracted)
@@ -381,5 +559,40 @@ mod tests {
         fs::write(&path, b"not a workbook").unwrap();
         let err = extract(&path, Format::Xls).unwrap_err();
         assert_eq!(err.code, "corrupt");
+    }
+
+    #[test]
+    fn extracts_indented_ods_with_odf_formulas() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sheet.ods");
+        let file = File::create(&path).unwrap();
+        let mut w = zip::ZipWriter::new(file);
+        let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+        let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+        w.start_file("mimetype", stored).unwrap();
+        w.write_all(b"application/vnd.oasis.opendocument.spreadsheet")
+            .unwrap();
+        w.start_file("content.xml", deflated).unwrap();
+        w.write_all(
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+  <office:body><office:spreadsheet><table:table table:name="Data">
+    <table:table-row>
+      <table:table-cell office:value-type="string"><text:p>Item</text:p></table:table-cell>
+      <table:table-cell office:value-type="string"><text:p>Score</text:p></table:table-cell>
+    </table:table-row>
+    <table:table-row>
+      <table:table-cell office:value-type="string"><text:p>Total</text:p></table:table-cell>
+      <table:table-cell table:formula="of:=SUM([.B2:.B3])" office:value-type="float" office:value="30"><text:p>30</text:p></table:table-cell>
+    </table:table-row>
+  </table:table></office:spreadsheet></office:body>
+</office:document-content>"#,
+        )
+        .unwrap();
+        w.finish().unwrap();
+
+        let out = extract(&path, Format::Ods).unwrap();
+        assert_eq!(out.units_hint, ["Data"]);
+        assert!(out.chunks[1].text.contains("B2: 30 (=SUM(B2:B3))"));
     }
 }
