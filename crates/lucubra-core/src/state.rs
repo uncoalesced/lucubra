@@ -413,12 +413,12 @@ mod tests {
             false
         );
 
-        s.apply(&event("transcript.verified", json!({"hash": "h1", "page": 1})))
-            .unwrap();
-        assert_eq!(
-            s.get(col::TRANSCRIPTS, "h1/p:1").unwrap()["verified"],
-            true
-        );
+        s.apply(&event(
+            "transcript.verified",
+            json!({"hash": "h1", "page": 1}),
+        ))
+        .unwrap();
+        assert_eq!(s.get(col::TRANSCRIPTS, "h1/p:1").unwrap()["verified"], true);
         assert_eq!(
             s.get(col::TRANSCRIPTS, "h1/p:1").unwrap()["path"],
             "notes/lec.pdf.p1.transcript.md"
