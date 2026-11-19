@@ -5,21 +5,26 @@
 //!
 //! For each file in replayed state, in path order, the queue extracts what is
 //! not yet in this device's index. A file another device already extracted is
-//! re-extracted locally without a new event. Failures are logged once and not
-//! retried automatically; `pending` files wait for `lucubra doctor` or for the
-//! user's approval.
+//! re-extracted locally without a new event. Failures are logged once; a file
+//! marked `pending` / `tool_missing` is automatically retried once `doctor`
+//! finds the missing tool.
 
 use std::collections::BTreeMap;
 use std::fs;
+use std::time::Duration;
 
+use lucubra_core::hlc::Hlc;
 use lucubra_core::state::col;
 use lucubra_core::{Error, Result, Workspace};
 use serde_json::{Value, json};
 
+use crate::doctor::{ToolStatus, check_tools};
 use crate::index::{INDEX_FILE, Index};
 use crate::native::{Chunk, Extracted, extract_native};
 use crate::route::{Extractor, Format, route_file};
-use crate::worker::{Reply, Supervisor};
+use crate::tier2::{extract_blend, extract_dwg};
+use crate::vision::render_pending_vision;
+use crate::worker::{DEFAULT_TIMEOUT, Reply, Supervisor};
 
 /// Message for formats with no reader in v1 (D49).
 pub const UNSUPPORTED_STEPS: &str = "Revit and SketchUp files cannot be read. Export the model \
@@ -59,6 +64,41 @@ pub struct Processed {
     pub outcome: Outcome,
 }
 
+/// Progress update emitted after each queued file is processed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Progress<'a> {
+    /// Files processed so far (1-based).
+    pub done: usize,
+    /// Total files queued in this run.
+    pub total: usize,
+    /// Workspace-relative path.
+    pub path: &'a str,
+    /// Detected format.
+    pub format: Format,
+    /// Outcome.
+    pub outcome: &'a Outcome,
+}
+
+/// Options controlling extraction queue runs.
+pub struct ExtractOptions<'a> {
+    /// External tools available on this machine.
+    pub tools: ToolStatus,
+    /// Per-request timeout for Tier 2 tools.
+    pub timeout: Duration,
+    /// Optional progress callback.
+    pub on_progress: Option<&'a mut dyn FnMut(&Progress<'_>)>,
+}
+
+impl Default for ExtractOptions<'_> {
+    fn default() -> Self {
+        Self {
+            tools: check_tools(),
+            timeout: DEFAULT_TIMEOUT,
+            on_progress: None,
+        }
+    }
+}
+
 /// What one run of the queue did.
 #[derive(Debug, Default)]
 pub struct ExtractReport {
@@ -70,10 +110,21 @@ pub struct ExtractReport {
     pub held: usize,
     /// Files with no readable copy at any known path.
     pub missing: Vec<String>,
+    /// Vision PNG pages rendered in this run.
+    pub vision_rendered: usize,
+    /// Vision PNG pages already cached or transcribed.
+    pub vision_skipped: usize,
 }
 
 fn str_of<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
     v.get(key).and_then(Value::as_str)
+}
+
+fn non_empty_str(v: Option<&Value>) -> Option<String> {
+    v.and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
 }
 
 /// Builds an `Extracted` from a worker's `ok` response.
@@ -114,10 +165,13 @@ pub fn from_worker(response: &Value) -> Extracted {
                 .collect()
         })
         .unwrap_or_default();
+    let meta = response.get("meta");
     Extracted {
         extractor: str_of(response, "extractor")
             .unwrap_or("lucubra-workers")
             .to_owned(),
+        title: non_empty_str(meta.and_then(|m| m.get("title"))),
+        subject: non_empty_str(meta.and_then(|m| m.get("subject"))),
         chunks,
         needs_vision,
         units_hint,
@@ -137,11 +191,12 @@ struct Fail {
 
 fn log_failure(
     ws: &Workspace,
+    observed: Option<&Hlc>,
     hash: &str,
     path: &str,
     format: Format,
     fail: &Fail,
-) -> Result<&'static str> {
+) -> Result<(&'static str, Option<Hlc>)> {
     let outcome = if matches!(fail.code.as_str(), "tool_missing" | "online_only") {
         "pending"
     } else {
@@ -154,8 +209,8 @@ fn log_failure(
     if let Some(tool) = fail.tool {
         data["tool"] = Value::String(tool.to_owned());
     }
-    ws.append("file.failed", data)?;
-    Ok(outcome)
+    let ev = ws.append_observed("file.failed", data, observed)?;
+    Ok((outcome, Hlc::parse(&ev.hlc)))
 }
 
 /// Opens this device's index for a workspace.
@@ -166,13 +221,21 @@ pub fn open_index(ws: &Workspace) -> Result<Index> {
     Index::open(&cache_dir.join(INDEX_FILE))
 }
 
-/// Runs the queue once. `worker` is used for worker formats; without one,
-/// those files are reported as `NoWorker` and left for a later run.
-pub fn extract_pending(
+/// Runs the queue once with default options.
+pub fn extract_pending(ws: &Workspace, worker: Option<&mut Supervisor>) -> Result<ExtractReport> {
+    extract_pending_with_options(ws, worker, ExtractOptions::default())
+}
+
+/// Runs the queue once using explicit tool status, timeout, and progress callback.
+pub fn extract_pending_with_options(
     ws: &Workspace,
     mut worker: Option<&mut Supervisor>,
+    mut opts: ExtractOptions<'_>,
 ) -> Result<ExtractReport> {
-    let state = ws.replay()?.state;
+    let replay = ws.replay()?;
+    let state = replay.state;
+    let mut observed = replay.max_hlc;
+    let cache_dir = ws.cache_dir()?;
     let mut index = open_index(ws)?;
 
     // Every known path for each hash, in path order.
@@ -192,12 +255,21 @@ pub fn extract_pending(
     order.sort();
 
     let mut report = ExtractReport::default();
+    let mut work: Vec<(String, String, Format, bool)> = Vec::new();
+
     for (_, hash) in order {
-        let status = state
-            .get(col::FILES, &hash)
+        let file_entry = state.get(col::FILES, &hash);
+        let status = file_entry
             .and_then(|f| str_of(f, "status"))
             .unwrap_or("seen");
-        if matches!(status, "failed" | "pending") {
+        let code = file_entry.and_then(|f| str_of(f, "code"));
+        let missing_tool = file_entry.and_then(|f| str_of(f, "tool"));
+
+        let retry_tool = status == "pending"
+            && code == Some("tool_missing")
+            && missing_tool.is_some_and(|t| opts.tools.has(t));
+
+        if matches!(status, "failed" | "pending") && !retry_tool {
             report.held += 1;
             continue;
         }
@@ -210,8 +282,16 @@ pub fn extract_pending(
             report.missing.push(paths[0].clone());
             continue;
         };
+        let format = route_file(&ws.root().join(&path)).unwrap_or(Format::Unknown);
+        if format.extractor() == Extractor::None {
+            continue;
+        }
+        work.push((path, hash, format, status == "extracted"));
+    }
+
+    let total = work.len();
+    for (idx, (path, hash, format, already_extracted)) in work.into_iter().enumerate() {
         let abs = ws.root().join(&path);
-        let format = route_file(&abs).unwrap_or(Format::Unknown);
         let result: std::result::Result<Extracted, Fail> = match format.extractor() {
             Extractor::Native => extract_native(&abs, format).map_err(|f| Fail {
                 code: f.code.to_owned(),
@@ -220,11 +300,21 @@ pub fn extract_pending(
             }),
             Extractor::Worker => {
                 let Some(sup) = worker.as_deref_mut() else {
+                    let outcome = Outcome::NoWorker;
+                    if let Some(cb) = opts.on_progress.as_deref_mut() {
+                        cb(&Progress {
+                            done: idx + 1,
+                            total,
+                            path: &path,
+                            format,
+                            outcome: &outcome,
+                        });
+                    }
                     report.processed.push(Processed {
                         path,
                         hash,
                         format,
-                        outcome: Outcome::NoWorker,
+                        outcome,
                     });
                     continue;
                 };
@@ -235,6 +325,57 @@ pub fn extract_pending(
                         detail,
                         tool: None,
                     }),
+                }
+            }
+            Extractor::Tool("oda") => {
+                if opts.tools.oda.available {
+                    let Some(sup) = worker.as_deref_mut() else {
+                        let outcome = Outcome::NoWorker;
+                        if let Some(cb) = opts.on_progress.as_deref_mut() {
+                            cb(&Progress {
+                                done: idx + 1,
+                                total,
+                                path: &path,
+                                format,
+                                outcome: &outcome,
+                            });
+                        }
+                        report.processed.push(Processed {
+                            path,
+                            hash,
+                            format,
+                            outcome,
+                        });
+                        continue;
+                    };
+                    extract_dwg(&opts.tools, &abs, &cache_dir, sup, opts.timeout).map_err(|e| {
+                        Fail {
+                            code: e.code.to_owned(),
+                            detail: e.detail,
+                            tool: e.tool,
+                        }
+                    })
+                } else {
+                    Err(Fail {
+                        code: "tool_missing".into(),
+                        detail: opts.tools.oda.install_steps.into(),
+                        tool: Some("oda"),
+                    })
+                }
+            }
+            Extractor::Tool("blender") => {
+                if opts.tools.blender.available {
+                    extract_blend(&opts.tools, &abs, &cache_dir, opts.timeout).map_err(|e| Fail {
+                        code: e.code.to_owned(),
+                        detail: e.detail,
+                        tool: e.tool,
+                    })
+                } else {
+                    Err(Fail {
+                        code: "tool_missing".into(),
+                        detail: opts.tools.blender.install_steps.into(),
+                        tool: Some("blender"),
+                    })
                 }
             }
             Extractor::Tool(tool) => Err(Fail {
@@ -255,20 +396,25 @@ pub fn extract_pending(
         let outcome = match result {
             Ok(extracted) => {
                 index.store(&hash, &extracted)?;
-                let logged = status != "extracted";
+                let logged = !already_extracted;
                 if logged {
-                    ws.append(
-                        "file.extracted",
-                        json!({
-                            "hash": hash,
-                            "format": format.as_str(),
-                            "extractor": extracted.extractor,
-                            "chunks": extracted.chunks.len(),
-                            "units_hint": extracted.units_hint,
-                            "needs_vision": extracted.needs_vision,
-                            "truncated": extracted.truncated,
-                        }),
-                    )?;
+                    let mut data = json!({
+                        "hash": hash,
+                        "format": format.as_str(),
+                        "extractor": extracted.extractor,
+                        "chunks": extracted.chunks.len(),
+                        "units_hint": extracted.units_hint,
+                        "needs_vision": extracted.needs_vision,
+                        "truncated": extracted.truncated,
+                    });
+                    if let Some(title) = extracted.title {
+                        data["title"] = Value::String(title);
+                    }
+                    if let Some(subject) = extracted.subject {
+                        data["subject"] = Value::String(subject);
+                    }
+                    let ev = ws.append_observed("file.extracted", data, observed.as_ref())?;
+                    observed = Hlc::parse(&ev.hlc).or(observed);
                 }
                 Outcome::Extracted {
                     chunks: extracted.chunks.len(),
@@ -276,19 +422,35 @@ pub fn extract_pending(
                 }
             }
             Err(fail) => {
-                let outcome = log_failure(ws, &hash, &path, format, &fail)?;
+                let (outcome, next_hlc) =
+                    log_failure(ws, observed.as_ref(), &hash, &path, format, &fail)?;
+                observed = next_hlc.or(observed);
                 Outcome::Failed {
                     code: fail.code,
                     outcome,
                 }
             }
         };
+        if let Some(cb) = opts.on_progress.as_deref_mut() {
+            cb(&Progress {
+                done: idx + 1,
+                total,
+                path: &path,
+                format,
+                outcome: &outcome,
+            });
+        }
         report.processed.push(Processed {
             path,
             hash,
             format,
             outcome,
         });
+    }
+    if let Some(sup) = worker {
+        let vision = render_pending_vision(ws, sup)?;
+        report.vision_rendered = vision.rendered.len();
+        report.vision_skipped = vision.skipped;
     }
     Ok(report)
 }
