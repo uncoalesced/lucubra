@@ -17,7 +17,7 @@ use lucubra_ingest::limits::RENDER_LONG_EDGE;
 use lucubra_ingest::pipeline::{Outcome, extract_pending, open_index};
 use lucubra_ingest::route::route_file;
 use lucubra_ingest::scan;
-use lucubra_ingest::vision::render_dir;
+use lucubra_ingest::vision::{pending_vision_pages, render_dir, save_transcript};
 use lucubra_ingest::worker::{Supervisor, WorkerSpec};
 use serde_json::Value;
 use unicode_normalization::UnicodeNormalization;
@@ -171,6 +171,21 @@ fn corpus_matches_manifest_routing_outcomes_and_search() {
             );
         }
 
+        if let Some(pages) = expect.get("pages").and_then(Value::as_u64) {
+            assert_eq!(
+                file_state["pages"].as_u64(),
+                Some(pages),
+                "{rel}: pages mismatch in state: {file_state}"
+            );
+        }
+        if let Some(slides) = expect.get("slides").and_then(Value::as_u64) {
+            assert_eq!(
+                file_state["slides"].as_u64(),
+                Some(slides),
+                "{rel}: slides mismatch in state: {file_state}"
+            );
+        }
+
         if let Some(expected_vision) = expect.get("needs_vision").and_then(Value::as_array) {
             let actual_vision: Vec<u64> = file_state["needs_vision"]
                 .as_array()
@@ -245,6 +260,12 @@ fn corpus_matches_manifest_routing_outcomes_and_search() {
                 assert!(
                     word_hits.iter().any(|hit| hit.hash == *hash),
                     "{rel}: word search failed for {w:?}"
+                );
+                let w_nfd: String = w.nfd().collect();
+                let nfd_hits = index.search(&w_nfd, 20).unwrap();
+                assert!(
+                    nfd_hits.iter().any(|hit| hit.hash == *hash),
+                    "{rel}: NFD word search failed for {w:?}"
                 );
                 if w.chars().count() >= 3 {
                     let sub_hits = index.search_substring(w, 20).unwrap();
@@ -351,7 +372,7 @@ fn corpus_matches_manifest_routing_outcomes_and_search() {
                 .get("title")
                 .and_then(Value::as_str)
                 .is_some_and(|s| !s.is_empty());
-            if has_title || !chunk_texts.is_empty() {
+            if has_title && !chunk_texts.is_empty() {
                 classify_with_title_or_text += 1;
             }
         }
@@ -362,15 +383,108 @@ fn corpus_matches_manifest_routing_outcomes_and_search() {
         assert_eq!(classify_with_title_or_text, 40);
     }
 
-    // M2-10: verify NFD vs NFC and chillu vs ZWJ cross-matching if present in corpus.
-    let nfd_hits = index.search("അവൻ", 20).unwrap();
-    if !nfd_hits.is_empty() {
-        let atomic_hits = index.search("അവൻ", 20).unwrap();
-        let zwj_hits = index.search("അവന്\u{200D}", 20).unwrap();
-        let atomic_hashes: BTreeSet<&str> = atomic_hits.iter().map(|h| h.hash.as_str()).collect();
-        let zwj_hashes: BTreeSet<&str> = zwj_hits.iter().map(|h| h.hash.as_str()).collect();
-        assert_eq!(atomic_hashes, zwj_hashes);
+    // M2-10: verify NFD vs NFC cross-matching and atomic chillu vs ZWJ cross-matching directly.
+    let nfc_hash = &path_to_hash["inbox/text/malayalam-nfc.txt"];
+    let nfd_hash = &path_to_hash["inbox/text/malayalam-nfd.txt"];
+    let pdf_ml_hash = &path_to_hash["inbox/pdf/indic-malayalam.pdf"];
+
+    let nfc_query_hits = index.search("കോശങ്ങളിലെ", 20).unwrap();
+    let nfc_hit_hashes: BTreeSet<&str> = nfc_query_hits.iter().map(|h| h.hash.as_str()).collect();
+    assert!(nfc_hit_hashes.contains(nfc_hash.as_str()));
+    assert!(nfc_hit_hashes.contains(nfd_hash.as_str()));
+    assert!(nfc_hit_hashes.contains(pdf_ml_hash.as_str()));
+
+    let nfd_query: String = "കോശങ്ങളിലെ".nfd().collect();
+    let nfd_query_hits = index.search(&nfd_query, 20).unwrap();
+    let nfd_hit_hashes: BTreeSet<&str> = nfd_query_hits.iter().map(|h| h.hash.as_str()).collect();
+    assert_eq!(nfc_hit_hashes, nfd_hit_hashes);
+
+    let sub_nfd_hits = index.search_substring(&nfd_query, 20).unwrap();
+    let sub_nfd_hashes: BTreeSet<&str> = sub_nfd_hits.iter().map(|h| h.hash.as_str()).collect();
+    assert!(sub_nfd_hashes.contains(nfc_hash.as_str()));
+    assert!(sub_nfd_hashes.contains(nfd_hash.as_str()));
+    assert!(sub_nfd_hashes.contains(pdf_ml_hash.as_str()));
+
+    let atomic_hits = index.search("അവൻ", 20).unwrap();
+    let zwj_hits = index.search("അവന്\u{200D}", 20).unwrap();
+    assert!(!atomic_hits.is_empty());
+    let atomic_hashes: BTreeSet<&str> = atomic_hits.iter().map(|h| h.hash.as_str()).collect();
+    let zwj_hashes: BTreeSet<&str> = zwj_hits.iter().map(|h| h.hash.as_str()).collect();
+    assert_eq!(atomic_hashes, zwj_hashes);
+    assert!(atomic_hashes.contains(pdf_ml_hash.as_str()));
+    assert!(atomic_hashes.contains(nfc_hash.as_str()));
+    assert!(atomic_hashes.contains(nfd_hash.as_str()));
+
+    // M2-5 / M2-6: submit corpus transcripts and verify second ingest renders nothing.
+    for (rel, pages) in [
+        ("inbox/pdf/scanned-2pages.pdf", vec![1u32, 2]),
+        ("inbox/pdf/mixed-threshold.pdf", vec![1u32]),
+    ] {
+        let h = &path_to_hash[rel];
+        for page in pages {
+            let abs = save_transcript(
+                &ws,
+                h,
+                Some(page),
+                &format!("Transcript for {rel} page {page}"),
+                false,
+            )
+            .unwrap();
+            assert!(abs.is_file(), "missing saved transcript for {rel} p{page}");
+            assert!(
+                abs.starts_with(root.path().join("notes")),
+                "PDF transcript landed outside notes/: {}",
+                abs.display()
+            );
+        }
     }
+
+    let photo_hash = &path_to_hash["inbox/image/photo-notes.png"];
+    let photo_abs = save_transcript(
+        &ws,
+        photo_hash,
+        None,
+        "Handwriting transcript: equilibrium note",
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        photo_abs,
+        root.path()
+            .join("inbox")
+            .join("image")
+            .join("photo-notes.png.transcript.md")
+    );
+    assert!(photo_abs.is_file());
+
+    let state_after = ws.replay().unwrap().state;
+    for (rel, pages) in [
+        ("inbox/pdf/scanned-2pages.pdf", vec![1u32, 2]),
+        ("inbox/pdf/mixed-threshold.pdf", vec![1u32]),
+    ] {
+        let h = &path_to_hash[rel];
+        for page in pages {
+            let entry = state_after
+                .get(col::TRANSCRIPTS, &format!("{h}/p:{page}"))
+                .unwrap();
+            assert_eq!(entry["verified"], Value::Bool(false));
+        }
+        assert!(pending_vision_pages(&state_after, h).is_empty());
+    }
+    let photo_entry = state_after
+        .get(col::TRANSCRIPTS, &format!("{photo_hash}/img"))
+        .unwrap();
+    assert_eq!(photo_entry["verified"], Value::Bool(false));
+    assert_eq!(
+        photo_entry["path"],
+        "inbox/image/photo-notes.png.transcript.md"
+    );
+    assert!(pending_vision_pages(&state_after, photo_hash).is_empty());
+
+    let rescan = scan(&ws).unwrap();
+    assert_eq!(rescan.logged(), 0);
+    let second_report = extract_pending(&ws, Some(&mut sup)).unwrap();
+    assert_eq!(second_report.vision_rendered, 0);
 }
 
 fn collect_file_text(ws: &Workspace, hash: &str) -> Vec<String> {
