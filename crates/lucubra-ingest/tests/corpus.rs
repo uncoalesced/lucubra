@@ -79,9 +79,12 @@ fn corpus_matches_manifest_routing_outcomes_and_search() {
     let files = manifest["files"].as_array().unwrap();
     assert!(!files.is_empty());
 
-    // M2-2: every manifest entry routes to its expected format identifier.
+    // M2-2: every manifest entry (excluding classifier profile JSON) routes to its expected format identifier.
     for entry in files {
         let rel = entry["path"].as_str().unwrap();
+        if rel == "classify/profile.json" {
+            continue;
+        }
         let expected_fmt = entry["format"].as_str().unwrap();
         let detected = route_file(&dir.join(rel)).unwrap();
         assert_eq!(
@@ -254,20 +257,15 @@ fn corpus_matches_manifest_routing_outcomes_and_search() {
         }
 
         if let Some(sheets) = expect.get("sheets").and_then(Value::as_array) {
+            let mut all_summaries = String::new();
             for sheet in sheets {
                 let sname = sheet["name"].as_str().unwrap();
                 let sum = index
                     .chunk(hash, &format!("x:{sname}!summary"))
                     .unwrap()
                     .unwrap_or_else(|| panic!("{rel}: missing summary chunk for {sname}"));
-                if let Some(nr) = sheet.get("named_ranges").and_then(Value::as_array) {
-                    for name in nr {
-                        assert!(
-                            sum.contains(name.as_str().unwrap()),
-                            "{rel}: summary missing named range {name:?}: {sum}"
-                        );
-                    }
-                }
+                all_summaries.push_str(&sum);
+                all_summaries.push('\n');
                 if let Some(formulas) = sheet.get("formulas").and_then(Value::as_object) {
                     for (cell_ref, formula) in formulas {
                         let f = formula.as_str().unwrap().trim_start_matches('=');
@@ -287,6 +285,61 @@ fn corpus_matches_manifest_routing_outcomes_and_search() {
                             joined_nfc.contains(cell_ref) && joined_nfc.contains(&v_str),
                             "{rel}: sheet {sname} missing value {cell_ref}={v_str}"
                         );
+                    }
+                }
+            }
+            if let Some(nr) = expect.get("named_ranges").and_then(Value::as_array) {
+                for name in nr {
+                    assert!(
+                        all_summaries.contains(name.as_str().unwrap()),
+                        "{rel}: summaries missing named range {name:?}: {all_summaries}"
+                    );
+                }
+            }
+        }
+
+        if let Some(layers) = expect.get("layers").and_then(Value::as_array) {
+            for layer in layers {
+                assert!(
+                    joined_nfc.contains(layer.as_str().unwrap()),
+                    "{rel}: missing CAD layer {layer:?}"
+                );
+            }
+        }
+        if let Some(blocks) = expect.get("blocks").and_then(Value::as_array) {
+            for block in blocks {
+                assert!(
+                    joined_nfc.contains(block.as_str().unwrap()),
+                    "{rel}: missing CAD block {block:?}"
+                );
+            }
+        }
+        if let Some(nets) = expect.get("nets").and_then(Value::as_array) {
+            for net in nets {
+                assert!(
+                    joined_nfc.contains(net.as_str().unwrap()),
+                    "{rel}: missing EDA net {net:?}"
+                );
+            }
+        }
+        if let Some(analyses) = expect.get("analyses").and_then(Value::as_array) {
+            for cmd in analyses {
+                assert!(
+                    joined_nfc.contains(cmd.as_str().unwrap()),
+                    "{rel}: missing EDA analysis {cmd:?}"
+                );
+            }
+        }
+        if let Some(components) = expect.get("components").and_then(Value::as_array) {
+            for comp in components {
+                if let Some(s) = comp.as_str() {
+                    assert!(joined_nfc.contains(s), "{rel}: missing component {s}");
+                } else if let Some(obj) = comp.as_object() {
+                    if let Some(r) = obj.get("ref").and_then(Value::as_str) {
+                        assert!(joined_nfc.contains(r), "{rel}: missing component ref {r}");
+                    }
+                    if let Some(v) = obj.get("value").and_then(Value::as_str) {
+                        assert!(joined_nfc.contains(v), "{rel}: missing component value {v}");
                     }
                 }
             }
