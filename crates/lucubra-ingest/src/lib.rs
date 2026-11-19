@@ -5,6 +5,7 @@
 //! extractors, classification scoring and full-text indexing.
 
 pub mod discover;
+pub mod doctor;
 pub mod eda;
 pub mod epub;
 pub mod hash;
@@ -15,6 +16,9 @@ pub mod pipeline;
 pub mod route;
 pub mod scan;
 pub mod spreadsheet;
+pub mod tier2;
+pub mod vision;
+pub mod watch;
 pub mod worker;
 pub mod zipguard;
 
