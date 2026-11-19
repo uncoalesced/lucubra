@@ -131,11 +131,14 @@ fn online_only_files_are_reported_and_not_logged() {
     assert_eq!(report.online_only, [("inbox/cloud.pdf".to_owned(), 19)]);
     assert_eq!(report.online_only_bytes(), 19);
     assert_eq!(report.logged(), 1);
-    assert!(
-        ws.replay()
-            .unwrap()
-            .state
-            .get(col::PATHS, "inbox/cloud.pdf")
-            .is_none()
-    );
+    let state = ws.replay().unwrap().state;
+    assert!(state.get(col::PATHS, "inbox/cloud.pdf").is_none());
+    let pending = state
+        .get(
+            col::FILES,
+            &lucubra_ingest::scan::online_only_key("inbox/cloud.pdf"),
+        )
+        .unwrap();
+    assert_eq!(pending["status"], "pending");
+    assert_eq!(pending["code"], "online_only");
 }
