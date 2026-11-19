@@ -1,0 +1,2 @@
+Newtonian mechanics links net external force to linear momentum change.
+In an isolated collision without external impulse, conservation of linear momentum holds.
