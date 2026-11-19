@@ -177,6 +177,17 @@ impl Workspace {
         )
     }
 
+    /// Appends one event to this device's log, ordered after `observed`
+    /// without re-reading every log on disk.
+    pub fn append_observed(
+        &self,
+        kind: &str,
+        data: Value,
+        observed: Option<&Hlc>,
+    ) -> Result<Event> {
+        self.append_after(kind, data, observed)
+    }
+
     /// Appends one event to this device's log, ordered after every event seen.
     pub fn append(&self, kind: &str, data: Value) -> Result<Event> {
         let seen = self.replay()?.max_hlc;
