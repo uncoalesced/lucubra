@@ -95,3 +95,78 @@ fn commands_refuse_a_folder_that_is_not_a_workspace() {
     assert_eq!(code, Some(1));
     assert!(err.contains("not a Lucubra workspace"), "{err}");
 }
+
+#[test]
+fn doctor_ingest_transcript_and_search_work_end_to_end() {
+    let tmp = tempfile::tempdir().unwrap();
+    let ws = tmp.path().join("ws");
+    let data = tmp.path().join("data");
+    let ws_arg = ws.to_str().unwrap();
+
+    // Standalone `doctor` succeeds outside a workspace and reports tool names.
+    let (code, doc_out, doc_err) = Command::new(env!("CARGO_BIN_EXE_lucubra"))
+        .arg("doctor")
+        .current_dir(tmp.path())
+        .env("LUCUBRA_DATA_DIR", &data)
+        .env("PATH", "")
+        .output()
+        .map(|o| {
+            (
+                o.status.code(),
+                String::from_utf8(o.stdout).unwrap(),
+                String::from_utf8(o.stderr).unwrap(),
+            )
+        })
+        .unwrap();
+    assert_eq!(code, Some(0), "{doc_err}");
+    assert!(doc_out.contains("oda"), "{doc_out}");
+    assert!(doc_out.contains("blender"), "{doc_out}");
+
+    assert_eq!(lucubra(&data, &["init", "-w", ws_arg]).0, Some(0));
+    fs::write(
+        ws.join("inbox/notes.md"),
+        "# Unit 1 Optics\nSnell law governs refraction.\n",
+    )
+    .unwrap();
+    fs::write(
+        ws.join("inbox/photo.png"),
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde",
+    )
+    .unwrap();
+
+    let (code, ingest_out, err) = lucubra(&data, &["ingest", "-w", ws_arg]);
+    assert_eq!(code, Some(0), "{err}");
+    assert!(
+        ingest_out.contains("extracted inbox/notes.md"),
+        "{ingest_out}"
+    );
+
+    let (code, search_out, err) = lucubra(&data, &["search", "-w", ws_arg, "refraction"]);
+    assert_eq!(code, Some(0), "{err}");
+    assert!(search_out.contains("results: 1"), "{search_out}");
+
+    let photo_hash = ingest_out
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("inbox/photo.png [image] "))
+        .unwrap_or_else(|| panic!("missing scan hash in {ingest_out}"))
+        .trim()
+        .to_owned();
+    let (code, tr_out, err) = lucubra(
+        &data,
+        &[
+            "transcript",
+            "-w",
+            ws_arg,
+            "--hash",
+            &photo_hash,
+            "--text",
+            "Handwritten lens equation notes.",
+        ],
+    );
+    assert_eq!(code, Some(0), "{err}");
+    assert!(tr_out.contains("photo.png.transcript.md"), "{tr_out}");
+
+    let (code, tr_search, err) = lucubra(&data, &["search", "-w", ws_arg, "lens"]);
+    assert_eq!(code, Some(0), "{err}");
+    assert!(tr_search.contains("results: 1"), "{tr_search}");
+}
