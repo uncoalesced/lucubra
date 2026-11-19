@@ -10,6 +10,7 @@ import pytest
     "expression",
     [
         "MIT",
+        "MIT-0",
         "Apache-2.0",
         "MIT OR Apache-2.0",
         "(MIT AND BSD-3-Clause)",
