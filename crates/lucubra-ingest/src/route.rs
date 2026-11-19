@@ -31,6 +31,7 @@ pub enum Format {
     Txt,
     Html,
     Ipynb,
+    Subtitle,
     Code,
     Image,
     Dxf,
@@ -65,7 +66,7 @@ pub enum Extractor {
 
 impl Format {
     /// Every format, in declaration order.
-    pub const ALL: [Format; 29] = [
+    pub const ALL: [Format; 30] = [
         Format::Pdf,
         Format::Docx,
         Format::Pptx,
@@ -80,6 +81,7 @@ impl Format {
         Format::Txt,
         Format::Html,
         Format::Ipynb,
+        Format::Subtitle,
         Format::Code,
         Format::Image,
         Format::Dxf,
@@ -114,6 +116,7 @@ impl Format {
             Format::Txt => "txt",
             Format::Html => "html",
             Format::Ipynb => "ipynb",
+            Format::Subtitle => "subtitle",
             Format::Code => "code",
             Format::Image => "image",
             Format::Dxf => "dxf",
@@ -245,6 +248,7 @@ pub fn route(name: &Path, head: &[u8]) -> Format {
         "txt" | "text" => Format::Txt,
         "html" | "htm" | "xhtml" => Format::Html,
         "ipynb" => Format::Ipynb,
+        "srt" | "vtt" => Format::Subtitle,
         "dxf" if contains(head, b"SECTION") => Format::Dxf,
         "kicad_sch" => Format::KicadSch,
         "kicad_pcb" => Format::KicadPcb,
@@ -330,6 +334,14 @@ mod tests {
         assert_eq!(r("f.asc", b"Version 4\nSHEET 1 880 680\n"), "ltspice_asc");
         assert_eq!(r("b.gtl", b"%FSLAX46Y46*%\n"), "gerber");
         assert_eq!(r("m.skp", b"\xFF\xFE\xFF\x0ES\0k\0"), "skp");
+        assert_eq!(
+            r("lecture.vtt", b"WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nHello\n"),
+            "subtitle"
+        );
+        assert_eq!(
+            r("lecture.srt", b"1\n00:00:01,000 --> 00:00:03,000\nHello\n"),
+            "subtitle"
+        );
     }
 
     #[test]
