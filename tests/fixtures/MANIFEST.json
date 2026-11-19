@@ -4,7 +4,7 @@
     {
       "path": "cad/drawing.dxf",
       "format": "dxf",
-      "sha256": "92b24d23a7b261a5391c9f8f58d1b78696ce90ee31b85b497e8d34aa91ca26d8",
+      "sha256": "f69a456b977042b609251f44b3a97d6977d282ac553e1a1331281eb59382afe6",
       "bytes": 38432,
       "stub": false,
       "generator": "scripts/fixtures/gen_cad.py",
