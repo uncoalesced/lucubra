@@ -148,6 +148,50 @@ impl Index {
         tx.commit().map_err(sql)
     }
 
+    /// Inserts or replaces a single chunk (such as a saved vision transcript)
+    /// without removing existing chunks for `hash`.
+    pub fn upsert_chunk(&mut self, hash: &str, locator: &str, text: &str) -> Result<()> {
+        let tx = self.conn.transaction().map_err(sql)?;
+        let existing: Option<i64> = tx
+            .query_row(
+                "SELECT id FROM chunks WHERE hash = ?1 AND locator = ?2",
+                params![hash, locator],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(sql)?;
+        if let Some(id) = existing {
+            for table in ["fts_word", "fts_tri"] {
+                tx.execute(&format!("DELETE FROM {table} WHERE rowid = ?1"), [id])
+                    .map_err(sql)?;
+            }
+            tx.execute("DELETE FROM chunks WHERE id = ?1", [id])
+                .map_err(sql)?;
+        }
+        let next_ord: i64 = tx
+            .query_row(
+                "SELECT COALESCE(MAX(ord) + 1, 0) FROM chunks WHERE hash = ?1",
+                [hash],
+                |r| r.get(0),
+            )
+            .map_err(sql)?;
+        tx.execute(
+            "INSERT INTO chunks (hash, ord, locator, text) VALUES (?1, ?2, ?3, ?4)",
+            params![hash, next_ord, locator, text],
+        )
+        .map_err(sql)?;
+        let id = tx.last_insert_rowid();
+        let body = normalize_for_fts(text);
+        for table in ["fts_word", "fts_tri"] {
+            tx.execute(
+                &format!("INSERT INTO {table} (rowid, body) VALUES (?1, ?2)"),
+                params![id, body],
+            )
+            .map_err(sql)?;
+        }
+        tx.commit().map_err(sql)
+    }
+
     /// Returns one chunk's text.
     pub fn chunk(&self, hash: &str, locator: &str) -> Result<Option<String>> {
         self.conn
