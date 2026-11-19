@@ -80,6 +80,9 @@ def _build_drawing_dxf() -> bytes:
     )
     dim.render()
 
+    doc.classes.add_required_classes(doc.dxfversion)
+    doc.classes.classes = dict(sorted(doc.classes.classes.items()))
+
     out = io.StringIO()
     doc.write(out)
     return out.getvalue().replace("\r\n", "\n").encode("utf-8")
