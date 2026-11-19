@@ -116,7 +116,7 @@ def extract_pdf(path: str) -> dict[str, Any]:
             try:
                 textpage = page.get_textpage()
                 try:
-                    text = _clean(textpage.get_text_bounded())
+                    text = _clean(textpage.get_text_range())
                 finally:
                     textpage.close()
             finally:
