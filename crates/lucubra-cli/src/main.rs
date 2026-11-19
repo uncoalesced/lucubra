@@ -66,6 +66,31 @@ enum Command {
         #[arg(long, default_value_t = 10)]
         limit: usize,
     },
+    /// Check external tools (Python worker, ODA/LibreDWG, Blender) and retry
+    /// pending files in the workspace when a tool is found.
+    Doctor(Target),
+    /// Save an unverified (or verified) transcript for a vision page or image.
+    Transcript {
+        #[command(flatten)]
+        target: Target,
+        /// Full BLAKE3 hash or unambiguous prefix of the source file.
+        #[arg(long)]
+        hash: String,
+        /// 1-based page number (omit for standalone images).
+        #[arg(long)]
+        page: Option<u32>,
+        /// Transcript Markdown text.
+        #[arg(long, required_unless_present = "file")]
+        text: Option<String>,
+        /// Read transcript Markdown text from a file.
+        #[arg(long)]
+        file: Option<PathBuf>,
+        /// Mark the transcript as verified instead of unverified.
+        #[arg(long)]
+        verified: bool,
+    },
+    /// Watch the workspace and scan + extract changed files.
+    Watch(Target),
 }
 
 fn print_scan(report: &lucubra_ingest::ScanReport) {
@@ -118,6 +143,80 @@ fn print_report(report: &ProjectReport) {
     for warning in &report.warnings {
         println!("warning: {warning}");
     }
+}
+
+fn run_extract(
+    ws: &Workspace,
+    tools: lucubra_ingest::doctor::ToolStatus,
+) -> lucubra_core::Result<()> {
+    use lucubra_ingest::pipeline::{
+        ExtractOptions, Outcome, Progress, extract_pending_with_options,
+    };
+    let mut worker =
+        match lucubra_ingest::worker::python_supervisor(lucubra_ingest::worker::DEFAULT_TIMEOUT) {
+            Ok(sup) => Some(sup),
+            Err(reason) => {
+                println!("worker unavailable: {reason}");
+                None
+            }
+        };
+    let mut progress = |p: &Progress<'_>| {
+        if p.total <= 50 || p.done == p.total || p.done.is_multiple_of(50) {
+            match p.outcome {
+                Outcome::Extracted { chunks, .. } => {
+                    println!(
+                        "  [{}/{}] extracted {} [{}]: {chunks} chunks",
+                        p.done,
+                        p.total,
+                        p.path,
+                        p.format.as_str()
+                    );
+                }
+                Outcome::Failed { code, outcome } => {
+                    println!(
+                        "  [{}/{}] {outcome} {} [{}]: {code}",
+                        p.done,
+                        p.total,
+                        p.path,
+                        p.format.as_str()
+                    );
+                }
+                Outcome::NoWorker => {}
+            }
+        }
+    };
+    let opts = ExtractOptions {
+        tools,
+        on_progress: Some(&mut progress),
+        ..ExtractOptions::default()
+    };
+    let report = extract_pending_with_options(ws, worker.as_mut(), opts)?;
+    let waiting = report
+        .processed
+        .iter()
+        .filter(|p| matches!(p.outcome, Outcome::NoWorker))
+        .count();
+    println!(
+        "extraction: {} done now, {} already indexed, {} failed or pending earlier",
+        report.processed.len() - waiting,
+        report.up_to_date,
+        report.held
+    );
+    if report.vision_rendered > 0 || report.vision_skipped > 0 {
+        println!(
+            "vision: {} pages rendered, {} already cached",
+            report.vision_rendered, report.vision_skipped
+        );
+    }
+    if waiting > 0 {
+        println!(
+            "waiting for a Python worker: {waiting} files; they are extracted on the next ingest with a worker"
+        );
+    }
+    for path in &report.missing {
+        println!("warning: no copy on disk: {path}");
+    }
+    Ok(())
 }
 
 fn confirm_reset() -> bool {
@@ -179,48 +278,64 @@ fn run(command: Command) -> lucubra_core::Result<()> {
             print_scan(&lucubra_ingest::scan(&ws)?);
         }
         Command::Ingest(target) => {
-            use lucubra_ingest::pipeline::{Outcome, extract_pending};
             let ws = Workspace::open(&workspace_path(&target), &data_dir)?;
             print_scan(&lucubra_ingest::scan(&ws)?);
-            let mut worker = match lucubra_ingest::worker::python_supervisor(
-                lucubra_ingest::worker::DEFAULT_TIMEOUT,
-            ) {
-                Ok(sup) => Some(sup),
-                Err(reason) => {
-                    println!("worker unavailable: {reason}");
-                    None
+            run_extract(&ws, lucubra_ingest::doctor::check_tools())?;
+        }
+        Command::Doctor(target) => {
+            let status = lucubra_ingest::doctor::check_tools();
+            for tool in status.all() {
+                if let Some(path) = &tool.path {
+                    let kind = tool.variant.map(|v| format!(" [{v}]")).unwrap_or_default();
+                    println!("ok       {}{} -> {}", tool.id, kind, path.display());
+                } else {
+                    println!("missing  {} ({})", tool.id, tool.name);
+                    println!("         install: {}", tool.install_steps);
+                }
+            }
+            let ws_root = workspace_path(&target);
+            if target.workspace.is_some() || ws_root.join(".lucubra").join("VERSION").is_file() {
+                let ws = Workspace::open(&ws_root, &data_dir)?;
+                run_extract(&ws, status)?;
+            }
+        }
+        Command::Transcript {
+            target,
+            hash,
+            page,
+            text,
+            file,
+            verified,
+        } => {
+            let ws = Workspace::open(&workspace_path(&target), &data_dir)?;
+            let body = match (text, file) {
+                (Some(t), _) => t,
+                (None, Some(path)) => std::fs::read_to_string(&path).map_err(|e| {
+                    lucubra_core::Error::io(format!("reading {}", path.display()), e)
+                })?,
+                (None, None) => {
+                    return Err(lucubra_core::Error::Invalid(
+                        "provide --text or --file".into(),
+                    ));
                 }
             };
-            let report = extract_pending(&ws, worker.as_mut())?;
-            let mut waiting = 0;
-            for p in &report.processed {
-                match &p.outcome {
-                    Outcome::Extracted { chunks, .. } => {
-                        println!(
-                            "  extracted {} [{}]: {chunks} chunks",
-                            p.path,
-                            p.format.as_str()
-                        );
-                    }
-                    Outcome::Failed { code, outcome } => {
-                        println!("  {outcome} {} [{}]: {code}", p.path, p.format.as_str());
-                    }
-                    Outcome::NoWorker => waiting += 1,
+            let saved = lucubra_ingest::vision::save_transcript(&ws, &hash, page, &body, verified)?;
+            println!("transcript saved: {}", saved.display());
+        }
+        Command::Watch(target) => {
+            let ws = Workspace::open(&workspace_path(&target), &data_dir)?;
+            let watcher = lucubra_ingest::watch::WorkspaceWatcher::start(
+                ws.root(),
+                std::time::Duration::from_millis(300),
+            )?;
+            println!("watching {} (Ctrl-C to stop)", ws.root().display());
+            loop {
+                let batch = watcher.next_batch(std::time::Duration::from_secs(60));
+                if !batch.is_empty() {
+                    println!("changed: {} file(s)", batch.len());
+                    print_scan(&lucubra_ingest::scan(&ws)?);
+                    run_extract(&ws, lucubra_ingest::doctor::check_tools())?;
                 }
-            }
-            println!(
-                "extraction: {} done now, {} already indexed, {} failed or pending earlier",
-                report.processed.len() - waiting,
-                report.up_to_date,
-                report.held
-            );
-            if waiting > 0 {
-                println!(
-                    "waiting for a Python worker: {waiting} files; they are extracted on the next ingest with a worker"
-                );
-            }
-            for path in &report.missing {
-                println!("warning: no copy on disk: {path}");
             }
         }
         Command::Search {
