@@ -34,15 +34,19 @@ pub struct WorkerSpec {
 }
 
 impl WorkerSpec {
-    /// The Python workers: `<python> -I -m lucubra_workers`.
+    /// The Python workers: `<python> -I -B -X utf8 -m lucubra_workers`.
     pub fn python(python: impl Into<PathBuf>) -> WorkerSpec {
         WorkerSpec {
             program: python.into(),
-            args: vec!["-I".into(), "-m".into(), "lucubra_workers".into()],
-            envs: vec![
-                ("PYTHONIOENCODING".into(), "utf-8".into()),
-                ("LUCUBRA_WORKER_MEM_MB".into(), "2048".into()),
+            args: vec![
+                "-I".into(),
+                "-B".into(),
+                "-X".into(),
+                "utf8".into(),
+                "-m".into(),
+                "lucubra_workers".into(),
             ],
+            envs: vec![("LUCUBRA_WORKER_MEM_MB".into(), "2048".into())],
         }
     }
 }
