@@ -16,6 +16,7 @@ from importlib import metadata
 
 ALLOWED = {
     "MIT",
+    "MIT-0",
     "BSD-2-Clause",
     "BSD-3-Clause",
     "Apache-2.0",
