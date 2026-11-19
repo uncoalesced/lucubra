@@ -204,6 +204,30 @@ impl Index {
             .map_err(sql)
     }
 
+    /// Returns stored chunk locators for `hash` in document order.
+    pub fn locators_for_hash(&self, hash: &str, limit: usize) -> Result<Vec<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT locator FROM chunks WHERE hash = ?1 ORDER BY ord LIMIT ?2")
+            .map_err(sql)?;
+        let rows = stmt
+            .query_map(params![hash, limit as i64], |r| r.get(0))
+            .map_err(sql)?;
+        rows.collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(sql)
+    }
+
+    /// Number of indexed chunks stored for `hash`.
+    pub fn chunk_count(&self, hash: &str) -> Result<usize> {
+        let count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM chunks WHERE hash = ?1", [hash], |r| {
+                r.get(0)
+            })
+            .map_err(sql)?;
+        Ok(usize::try_from(count).unwrap_or(0))
+    }
+
     /// Word search with BM25 ranking.
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<Hit>> {
         match match_expr(query, false) {
@@ -318,6 +342,11 @@ mod tests {
             Some("Respiration releases energy.")
         );
         assert_eq!(index.chunk("h1", "h:1").unwrap(), None);
+        assert_eq!(
+            index.locators_for_hash("h1", 10).unwrap(),
+            vec!["h:0".to_owned()]
+        );
+        assert_eq!(index.chunk_count("h1").unwrap(), 1);
     }
 
     #[test]
