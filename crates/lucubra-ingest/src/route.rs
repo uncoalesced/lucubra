@@ -335,7 +335,10 @@ mod tests {
         assert_eq!(r("b.gtl", b"%FSLAX46Y46*%\n"), "gerber");
         assert_eq!(r("m.skp", b"\xFF\xFE\xFF\x0ES\0k\0"), "skp");
         assert_eq!(
-            r("lecture.vtt", b"WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nHello\n"),
+            r(
+                "lecture.vtt",
+                b"WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nHello\n"
+            ),
             "subtitle"
         );
         assert_eq!(
