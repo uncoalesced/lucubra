@@ -76,7 +76,7 @@ pub fn decode_text(bytes: &[u8]) -> Result<String, Failure> {
 
 /// Splits text into pieces of at most `CHUNK_CHARS` characters, at paragraph
 /// breaks where possible, then at line breaks, then at character boundaries.
-fn split_text(text: &str) -> Vec<String> {
+pub(crate) fn split_text(text: &str) -> Vec<String> {
     let mut pieces = Vec::new();
     let mut current = String::new();
     let flush = |current: &mut String, pieces: &mut Vec<String>| {
@@ -216,7 +216,7 @@ fn decode_entities(s: &str) -> String {
         .replace("&amp;", "&")
 }
 
-fn html(text: &str) -> Extracted {
+pub(crate) fn strip_html(text: &str) -> (String, Vec<String>) {
     let mut out_text = String::new();
     let mut hints = Vec::new();
     let mut skipping: Option<String> = None;
@@ -289,6 +289,11 @@ fn html(text: &str) -> Extracted {
         blank = 0;
         cleaned.push_str(line);
     }
+    (cleaned, hints)
+}
+
+fn html(text: &str) -> Extracted {
+    let (cleaned, hints) = strip_html(text);
     let mut out = plain(&cleaned);
     out.units_hint = hints;
     out
@@ -420,19 +425,82 @@ fn cap(mut out: Extracted) -> Extracted {
     out
 }
 
+fn short_timestamp(raw: &str) -> String {
+    let token = raw.split_whitespace().next().unwrap_or("");
+    token.split(['.', ',']).next().unwrap_or(token).to_owned()
+}
+
+fn subtitle(text: &str) -> Extracted {
+    let mut cues: Vec<(String, String, String)> = Vec::new();
+    for block in text.split("\n\n") {
+        let lines: Vec<&str> = block
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .collect();
+        if lines.is_empty() {
+            continue;
+        }
+        let head = lines[0];
+        if head.starts_with("WEBVTT")
+            || head.starts_with("NOTE")
+            || head.starts_with("STYLE")
+            || head.starts_with("REGION")
+        {
+            continue;
+        }
+        let Some(arrow_idx) = lines.iter().position(|l| l.contains("-->")) else {
+            continue;
+        };
+        let (left, right) = lines[arrow_idx].split_once("-->").unwrap_or(("", ""));
+        let start = short_timestamp(left.trim());
+        let end = short_timestamp(right.trim());
+        let raw_body = lines[arrow_idx + 1..].join(" ");
+        let (clean, _) = strip_html(&raw_body);
+        let body = clean.split_whitespace().collect::<Vec<_>>().join(" ");
+        if !body.is_empty() {
+            cues.push((start, end, body));
+        }
+    }
+    if cues.is_empty() {
+        return plain(text);
+    }
+    let mut out = Extracted::default();
+    let mut chunk_start = String::new();
+    let mut chunk_end = String::new();
+    let mut chunk_text = String::new();
+    for (start, end, body) in cues {
+        let entry = format!("[{start}] {body}");
+        if !chunk_text.is_empty()
+            && chunk_text.chars().count() + entry.chars().count() + 1 > CHUNK_CHARS
+        {
+            out.chunks.push(Chunk {
+                locator: format!("t:{chunk_start}-{chunk_end}"),
+                text: std::mem::take(&mut chunk_text),
+            });
+            chunk_start.clear();
+        }
+        if chunk_start.is_empty() {
+            chunk_start = start;
+        }
+        chunk_end = end;
+        if !chunk_text.is_empty() {
+            chunk_text.push('\n');
+        }
+        chunk_text.push_str(&entry);
+    }
+    if !chunk_text.is_empty() {
+        out.chunks.push(Chunk {
+            locator: format!("t:{chunk_start}-{chunk_end}"),
+            text: chunk_text,
+        });
+    }
+    out
+}
+
 /// Formats handled natively by this module.
 pub fn handles(format: Format) -> bool {
-    matches!(
-        format,
-        Format::Md
-            | Format::Txt
-            | Format::Html
-            | Format::Code
-            | Format::Csv
-            | Format::Tsv
-            | Format::Ipynb
-            | Format::Image
-    )
+    format.extractor() == crate::route::Extractor::Native
 }
 
 /// Extracts a file with a native extractor.
@@ -455,6 +523,13 @@ pub fn extract_native(path: &Path, format: Format) -> Result<Extracted, Failure>
             needs_vision: vec![1],
             ..Extracted::default()
         }
+    } else if matches!(
+        format,
+        Format::Xlsx | Format::Xlsm | Format::Xls | Format::Ods
+    ) {
+        crate::spreadsheet::extract(path, format)?
+    } else if format == Format::Epub {
+        crate::epub::extract(path)?
     } else {
         let bytes = fs::read(path).map_err(|e| failure("corrupt", e.to_string()))?;
         match format {
@@ -464,6 +539,13 @@ pub fn extract_native(path: &Path, format: Format) -> Result<Extracted, Failure>
             Format::Csv => delimited(&bytes, b',')?,
             Format::Tsv => delimited(&bytes, b'\t')?,
             Format::Ipynb => notebook(&bytes)?,
+            Format::Subtitle => subtitle(&decode_text(&bytes)?),
+            Format::KicadSch
+            | Format::KicadPcb
+            | Format::KicadPro
+            | Format::Spice
+            | Format::LtspiceAsc
+            | Format::Gerber => crate::eda::extract(&decode_text(&bytes)?, format)?,
             _ => unreachable!("checked by handles"),
         }
     };
@@ -571,5 +653,28 @@ mod tests {
             extract_native(&md, Format::Pdf).unwrap_err().code,
             "unsupported"
         );
+    }
+
+    #[test]
+    fn native_subtitle_vtt_and_srt_keep_timestamps() {
+        let vtt = "WEBVTT\n\n00:00:01.000 --> 00:00:04.200\n<v Prof>Today we study entropy.</v>\n\n00:01:05.500 --> 00:01:12.000\nSecond law of thermodynamics.\n";
+        let out = subtitle(vtt);
+        assert_eq!(out.chunks.len(), 1);
+        assert_eq!(out.chunks[0].locator, "t:00:00:01-00:01:12");
+        assert!(
+            out.chunks[0]
+                .text
+                .contains("[00:00:01] Today we study entropy.")
+        );
+        assert!(
+            out.chunks[0]
+                .text
+                .contains("[00:01:05] Second law of thermodynamics.")
+        );
+
+        let srt = "1\n00:00:10,000 --> 00:00:15,500\nKirchhoff current law.\n";
+        let srt_out = subtitle(srt);
+        assert_eq!(srt_out.chunks[0].locator, "t:00:00:10-00:00:15");
+        assert!(srt_out.chunks[0].text.contains("Kirchhoff current law."));
     }
 }
