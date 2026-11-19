@@ -32,6 +32,8 @@ pub const KNOWN_TYPES: &[&str] = &[
     "file.move_undone",
     "file.tagged",
     // Content
+    "subject.created",
+    "subject.updated",
     "transcript.saved",
     "transcript.verified",
     "unit.created",
