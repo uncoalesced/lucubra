@@ -40,6 +40,10 @@ pub struct Extracted {
     pub title: Option<String>,
     /// Document subject metadata when present.
     pub subject: Option<String>,
+    /// Total page count when reported by the extractor (e.g., PDF).
+    pub pages: Option<u32>,
+    /// Total slide count when reported by the extractor (e.g., PPTX).
+    pub slides: Option<u32>,
     /// Chunks in document order.
     pub chunks: Vec<Chunk>,
     /// Pages, slides or images needing vision (1-based).
