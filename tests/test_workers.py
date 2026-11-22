@@ -4,8 +4,12 @@
 
 import io
 import json
+import os
+import subprocess
+import sys
 
 import lucubra_workers
+from lucubra_workers.limits import apply_memory_limit
 
 
 def run(lines: str) -> list[dict]:
@@ -31,3 +35,21 @@ def test_invalid_json_and_non_object_are_bad_requests():
     responses = run("not json\n[1, 2]\n")
     assert [r["error"]["code"] for r in responses] == ["bad_request", "bad_request"]
     assert all(r["id"] is None for r in responses)
+
+
+def test_apply_memory_limit_in_subprocess():
+    env = os.environ.copy()
+    env["LUCUBRA_WORKER_MEM_MB"] = "2048"
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from lucubra_workers.limits import apply_memory_limit; print(apply_memory_limit())",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert proc.stdout.strip() in {"True", "False"}
+    assert apply_memory_limit(0) is False

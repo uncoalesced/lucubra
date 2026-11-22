@@ -1,0 +1,197 @@
+{
+  "protocol_version": "2025-11-25",
+  "transcripts": {
+    "lifecycle_study": {
+      "client_info": {
+        "name": "claude-code",
+        "version": "2.1.0"
+      },
+      "fixture_files": [
+        {
+          "path": "subjects/bio/cells/notes.md",
+          "content": "# Cellular Respiration\n\nMitochondria generate ATP via oxidative phosphorylation across the inner cristae membrane.\n"
+        }
+      ],
+      "steps": [
+        {
+          "method": "initialize",
+          "expect_server": "lucubra",
+          "expect_protocol": "2025-11-25"
+        },
+        {
+          "method": "notifications/initialized"
+        },
+        {
+          "method": "tools/list",
+          "expect_count": 11,
+          "expect_prefix": "lucubra_"
+        },
+        {
+          "method": "prompts/list",
+          "expect_names": ["onboard", "study", "plan", "quiz", "wrap-up"]
+        },
+        {
+          "method": "tools/call",
+          "tool": "lucubra_orient",
+          "args": {},
+          "expect_ok": true,
+          "expect_host_id": "claude-code"
+        },
+        {
+          "method": "tools/call",
+          "tool": "lucubra_ingest",
+          "args": { "action": "scan", "extract": true },
+          "expect_ok": true
+        },
+        {
+          "method": "tools/call",
+          "tool": "lucubra_search",
+          "args": { "query": "Mitochondria", "limit": 5 },
+          "expect_ok": true,
+          "capture_first_hit_ref": true
+        },
+        {
+          "method": "tools/call",
+          "tool": "lucubra_read",
+          "args_from_captured_ref": { "action": "chunk" },
+          "expect_ok": true,
+          "expect_trust": "untrusted_study_material"
+        },
+        {
+          "method": "tools/call",
+          "tool": "lucubra_submit",
+          "args": {
+            "action": "unit_summary",
+            "subject": "bio",
+            "unit": "cells",
+            "title": "Cellular Respiration",
+            "summary": "ATP synthesis in mitochondria through electron transport and chemiosmosis.",
+            "concepts": ["oxidative phosphorylation", "ATP synthase"]
+          },
+          "expect_ok": true
+        },
+        {
+          "method": "tools/call",
+          "tool": "lucubra_session",
+          "args": {
+            "action": "start",
+            "units": ["bio/cells"],
+            "style": "explainer"
+          },
+          "expect_ok": true,
+          "capture_session_id": true
+        },
+        {
+          "method": "tools/call",
+          "tool": "lucubra_read",
+          "args": {
+            "action": "index",
+            "progress": [
+              {
+                "kind": "read",
+                "unit": "bio/cells",
+                "minutes": 12,
+                "style": "explainer",
+                "note": "Read ATP synthesis notes"
+              }
+            ]
+          },
+          "expect_ok": true
+        },
+        {
+          "method": "tools/call",
+          "tool": "lucubra_session",
+          "args": {
+            "action": "end",
+            "reason": "planned",
+            "summary": "Reviewed oxidative phosphorylation and ATP synthase."
+          },
+          "expect_ok": true
+        },
+        {
+          "method": "tools/call",
+          "tool": "lucubra_status",
+          "args": {},
+          "expect_ok": true,
+          "expect_logged_minutes": 12
+        }
+      ]
+    },
+    "s23_error_and_recovery": {
+      "client_info": {
+        "name": "cursor",
+        "version": "1.0.0"
+      },
+      "steps": [
+        {
+          "method": "initialize",
+          "expect_server": "lucubra",
+          "expect_protocol": "2025-11-25"
+        },
+        {
+          "method": "notifications/initialized"
+        },
+        {
+          "method": "tools/call",
+          "tool": "lucubra_serch",
+          "args": {},
+          "expect_ok": false,
+          "expect_code": "unknown_tool",
+          "expect_fix_contains": "lucubra_search"
+        },
+        {
+          "method": "tools/call",
+          "tool": "lucubra_read",
+          "args": {},
+          "expect_ok": false,
+          "expect_code": "invalid_action"
+        },
+        {
+          "method": "tools/call",
+          "tool": "lucubra_session",
+          "args": {
+            "action": "start",
+            "unit_id": "bio/cells"
+          },
+          "expect_ok": false,
+          "expect_code": "invalid_arguments",
+          "expect_fix_contains": "unit_id"
+        },
+        {
+          "method": "tools/call",
+          "tool": "lucubra_submit",
+          "args": {
+            "action": "unit_summary",
+            "subject": "con",
+            "unit": "cells",
+            "summary": "Reserved Windows device slug test."
+          },
+          "expect_ok": false,
+          "expect_code": "invalid_slug"
+        },
+        {
+          "method": "tools/call",
+          "tool": "lucubra_profile",
+          "args": {
+            "action": "set",
+            "fields": {
+              "level": "undergraduate",
+              "programme": "B.Sc Biology"
+            }
+          },
+          "expect_ok": true
+        }
+      ]
+    },
+    "s37_local_budget_exhaustion": {
+      "client_info": {
+        "name": "LM Studio",
+        "version": "0.3.2"
+      },
+      "long_fixture_rel": "subjects/thermo/ch1/notes.md",
+      "long_fixture_repeat": 260,
+      "long_fixture_unit_text": "Thermodynamics entropy enthalpy Gibbs free energy equilibrium constant derivation. ",
+      "expect_local_limit": 12000
+    }
+  }
+}

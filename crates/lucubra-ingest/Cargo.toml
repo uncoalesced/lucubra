@@ -9,6 +9,18 @@ publish.workspace = true
 
 [dependencies]
 lucubra-core.workspace = true
+blake3.workspace = true
+serde_json.workspace = true
+csv.workspace = true
+rusqlite.workspace = true
+calamine.workspace = true
+zip.workspace = true
+quick-xml.workspace = true
+notify.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+unicode-normalization.workspace = true
 
 [lints]
 workspace = true

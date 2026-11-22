@@ -73,6 +73,34 @@ def test_watermark_outside_source_fails(tmp_path):
     ]
 
 
+def make_generated_workspace(root: Path) -> None:
+    (root / ".lucubra" / "events").mkdir(parents=True)
+    (root / ".lucubra" / "events" / "d-0000000a.jsonl").write_text('{"v":1}\n', encoding="utf-8")
+    (root / "AGENTS.md").write_text("# Study workspace\n", encoding="utf-8")
+    (root / "subjects" / "maths").mkdir(parents=True)
+    (root / "subjects" / "maths" / "agents_maths.md").write_text("# Maths\n", encoding="utf-8")
+    (root / "page.png").write_bytes(b"\x89PNG\0" + audit.PROVENANCE.encode())
+
+
+def test_clean_generated_workspace_passes(tmp_path):
+    make_generated_workspace(tmp_path)
+    assert audit.audit_generated(tmp_path) == ([], 3)
+    assert audit.main(["--generated", str(tmp_path)]) == 0
+
+
+def test_watermark_in_generated_workspace_fails(tmp_path):
+    make_generated_workspace(tmp_path)
+    (tmp_path / "subjects" / "maths" / "UNIT.md").write_text(
+        f"<!-- {audit.PROVENANCE} -->\n", encoding="utf-8"
+    )
+    (tmp_path / "AGENTS.md").write_text(f"{audit.BANNER}\n", encoding="utf-8")
+    assert audit.audit_generated(tmp_path)[0] == [
+        "AGENTS.md: generated-by banner in a generated workspace file",
+        "subjects/maths/UNIT.md: provenance text in a generated workspace file",
+    ]
+    assert audit.main(["--generated", str(tmp_path)]) == 1
+
+
 def test_skipped_directories_are_not_walked(tmp_path):
     make_clean_tree(tmp_path)
     (tmp_path / "target").mkdir()

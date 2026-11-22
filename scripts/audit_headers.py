@@ -106,10 +106,45 @@ def audit(root: Path) -> tuple[list[str], int, int]:
     return violations, sources, others
 
 
+def audit_generated(root: Path) -> tuple[list[str], int]:
+    """Audit a generated workspace: no file may carry either phrase (S58, D46).
+
+    Returns (violations, files checked). Binary files are skipped.
+    """
+    violations, checked = [], 0
+    for folder, dirs, files in os.walk(root):
+        dirs.sort()
+        for name in sorted(files):
+            path = Path(folder) / name
+            data = path.read_bytes()
+            if b"\0" in data[:8192]:
+                continue
+            checked += 1
+            text = data.decode("utf-8-sig", errors="replace")
+            rel = path.relative_to(root).as_posix()
+            for needle, label in ((PROVENANCE, "provenance text"), (BANNER, "generated-by banner")):
+                if count(text, needle):
+                    violations.append(f"{rel}: {label} in a generated workspace file")
+    return violations, checked
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent.parent)
+    parser.add_argument(
+        "--generated",
+        type=Path,
+        metavar="WORKSPACE",
+        help="audit a generated workspace instead of the repository",
+    )
     args = parser.parse_args(argv)
+    if args.generated is not None:
+        violations, checked = audit_generated(args.generated.resolve())
+        for line in violations:
+            print(f"FAIL {line}")
+        status = "FAILED" if violations else "ok"
+        print(f"generated audit {status}: {checked} files, {len(violations)} violations")
+        return 1 if violations else 0
     violations, sources, others = audit(args.root.resolve())
     for line in violations:
         print(f"FAIL {line}")
