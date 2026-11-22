@@ -26,9 +26,23 @@ fn lucubra_binary() -> PathBuf {
         .and_then(|p| p.parent())
         .expect("deps/../ is cargo profile directory");
     let candidate = profile_dir.join(format!("lucubra{}", std::env::consts::EXE_SUFFIX));
+    if !candidate.is_file() {
+        // The CLI belongs to another crate, so `cargo test --workspace` may not have built it.
+        static BUILD: std::sync::Once = std::sync::Once::new();
+        BUILD.call_once(|| {
+            let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+            let mut cmd = std::process::Command::new(cargo);
+            cmd.args(["build", "-p", "lucubra-cli"]);
+            if profile_dir.file_name().is_some_and(|n| n == "release") {
+                cmd.arg("--release");
+            }
+            let status = cmd.status().expect("spawn cargo build -p lucubra-cli");
+            assert!(status.success(), "cargo build -p lucubra-cli failed");
+        });
+    }
     assert!(
         candidate.is_file(),
-        "missing built CLI binary at {}; run `cargo build -p lucubra-cli` first",
+        "missing built CLI binary at {}",
         candidate.display()
     );
     candidate
