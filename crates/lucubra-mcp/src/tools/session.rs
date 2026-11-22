@@ -205,16 +205,6 @@ pub fn execute(
                 ],
                 "lucubra_session(step)",
             )?;
-            let sid = opt_str(args, "session_id")?
-                .map(str::to_owned)
-                .or_else(|| ctx.active_session_id.map(str::to_owned))
-                .or_else(|| latest_active_session(&state))
-                .ok_or_else(|| {
-                    ToolError::new(
-                        ToolErrorCode::InvalidState,
-                        "no active session; call lucubra_session(action=\"start\") first",
-                    )
-                })?;
             let unit = req_str(
                 args,
                 "unit",
@@ -264,6 +254,17 @@ pub fn execute(
                     format!("style must be one of: {}", VALID_A2_STYLES.join(", ")),
                 ));
             }
+
+            let sid = opt_str(args, "session_id")?
+                .map(str::to_owned)
+                .or_else(|| ctx.active_session_id.map(str::to_owned))
+                .or_else(|| latest_active_session(&state))
+                .ok_or_else(|| {
+                    ToolError::new(
+                        ToolErrorCode::InvalidState,
+                        "no active session; call lucubra_session(action=\"start\") first",
+                    )
+                })?;
 
             let mut payload = json!({
                 "session_id": sid,
