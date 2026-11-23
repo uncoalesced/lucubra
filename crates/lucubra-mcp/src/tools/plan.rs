@@ -83,7 +83,7 @@ pub fn execute(
                     "busy_blocks must be an array of {start, end, label?} objects",
                 ));
             }
-            if action == "horizon"
+            if matches!(action, "propose" | "horizon")
                 && let Ok(r) = ctx.ws.replay()
                 && r.state.get(col::PROFILE, "schedule_planning") == Some(&Value::Bool(false))
             {
