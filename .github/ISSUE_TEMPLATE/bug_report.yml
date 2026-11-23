@@ -1,0 +1,80 @@
+name: Bug report
+description: Report a defect in Lucubra
+title: "bug: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug. Do not paste study material, grades, personal details or credentials. Describe the problem and attach only what is needed to reproduce it.
+  - type: input
+    id: lucubra_version
+    attributes:
+      label: Lucubra version
+      description: Output of `lucubra --version`
+      placeholder: "1.0.0-beta.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: interface
+    attributes:
+      label: Interface
+      options:
+        - Command line (lucubra CLI)
+        - MCP through an AI host
+        - Both
+    validations:
+      required: true
+  - type: input
+    id: host
+    attributes:
+      label: AI host (if MCP was involved)
+      description: Name of the host, or "not applicable"
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What you did
+      description: Numbered steps, with the command or tool call used
+      placeholder: |
+        1. lucubra init --workspace ...
+        2. lucubra ingest --workspace ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Error text
+      description: Paste the error text. Remove file names or content you do not want to share.
+      render: text
+  - type: checkboxes
+    id: privacy_check
+    attributes:
+      label: Privacy check
+      options:
+        - label: I have removed study material, grades, personal details and credentials from this report.
+          required: true
+        - label: I have read the bug report instructions in CONTRIBUTING.md.
+          required: true
