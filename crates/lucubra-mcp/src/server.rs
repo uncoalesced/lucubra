@@ -156,6 +156,40 @@ impl LucubraServer {
         Ok(detected)
     }
 
+    /// Asks for missing onboarding fields with one form when the client
+    /// supports form elicitation, then records answers through the normal
+    /// `answer` path (S35). Does nothing otherwise.
+    async fn elicit_profile(&self, peer: &rmcp::service::Peer<RoleServer>) -> Result<(), McpError> {
+        if self.inner.read_only_tools
+            || !self
+                .inner
+                .runtime
+                .read()
+                .await
+                .detected_caps
+                .elicitation_form
+        {
+            return Ok(());
+        }
+        let ws = Arc::clone(&self.inner.ws);
+        let missing = tokio::task::spawn_blocking(move || {
+            ws.replay()
+                .map(|r| crate::tools::orient::missing_required_fields(&r.state))
+                .unwrap_or_default()
+        })
+        .await
+        .map_err(|e| McpError::internal_error(format!("profile task panic: {e}"), None))?;
+        for (field, value) in crate::elicit::ask(peer, &missing).await {
+            let mut args = Map::new();
+            args.insert("action".into(), Value::String("answer".into()));
+            args.insert("field".into(), Value::String(field));
+            args.insert("value".into(), value);
+            // A rejected answer is asked again conversationally by `next`.
+            self.handle_call_raw("lucubra_profile", Some(args)).await?;
+        }
+        Ok(())
+    }
+
     /// Executes one `tools/call` directly against the pre-validator and dispatcher.
     pub async fn handle_call_raw(
         &self,
@@ -313,8 +347,18 @@ impl ServerHandler for LucubraServer {
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, McpError> {
+        let profile_next = request.name == "lucubra_profile"
+            && request
+                .arguments
+                .as_ref()
+                .and_then(|a| a.get("action"))
+                .and_then(Value::as_str)
+                == Some("next");
+        if profile_next {
+            self.elicit_profile(&context.peer).await?;
+        }
         self.handle_call_raw(&request.name, request.arguments).await
     }
 
