@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          command: check licenses bans sources
+          command: check advisories licenses bans sources
 
   python:
     runs-on: ubuntu-latest
