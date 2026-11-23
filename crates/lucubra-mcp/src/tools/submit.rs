@@ -2,7 +2,8 @@
 // Engineered by uncoalesced
 
 //! `lucubra_submit`: validation across all 6 submit actions and persistence for
-//! `unit_summary`, `transcript`, and `session_summary` (`SPEC 8.2`, `S23`).
+//! `unit_summary`, `transcript`, `session_summary` and `classification`
+//! (`SPEC 8.2`, `10.3`, `S23`).
 
 use std::collections::BTreeSet;
 
@@ -70,7 +71,7 @@ pub struct SubmitArgs {
     /// Session id (for session_summary and grades).
     #[serde(default)]
     pub session_id: Option<String>,
-    /// Classification proposals (M4).
+    /// Classifications: `{path|file_hash, subject, unit?, confirmed_by_user?}`.
     #[serde(default)]
     pub classifications: Option<Vec<Value>>,
     /// Practice item mode: strict (default) or extended (M6).
@@ -397,7 +398,7 @@ pub fn execute(
             let Some(arr) = args.get("classifications").and_then(Value::as_array) else {
                 return Err(ToolError::new(
                     ToolErrorCode::InvalidArguments,
-                    "classifications must be a non-empty array of {path|file_hash, subject, unit?, confidence?}",
+                    "classifications must be a non-empty array of {path|file_hash, subject, unit?, confirmed_by_user?}",
                 ));
             };
             if arr.is_empty() {
@@ -406,6 +407,9 @@ pub fn execute(
                     "classifications must not be empty",
                 ));
             }
+            let state = ctx.ws.replay().map_err(ws_err)?.state;
+            // Validate every entry before writing any event.
+            let mut planned = Vec::new();
             for (idx, item) in arr.iter().enumerate() {
                 let Some(obj) = item.as_object() else {
                     return Err(ToolError::new(
@@ -413,13 +417,21 @@ pub fn execute(
                         format!("classifications[{idx}] must be an object"),
                     ));
                 };
-                if obj.get("path").and_then(Value::as_str).is_none()
-                    && obj.get("file_hash").and_then(Value::as_str).is_none()
-                {
-                    return Err(ToolError::new(
-                        ToolErrorCode::InvalidArguments,
-                        format!("classifications[{idx}] requires 'path' or 'file_hash'"),
-                    ));
+                for key in obj.keys() {
+                    if !matches!(
+                        key.as_str(),
+                        "path"
+                            | "file_hash"
+                            | "subject"
+                            | "unit"
+                            | "confidence"
+                            | "confirmed_by_user"
+                    ) {
+                        return Err(ToolError::new(
+                            ToolErrorCode::InvalidArguments,
+                            format!("classifications[{idx}] has unknown key '{key}'"),
+                        ));
+                    }
                 }
                 let subj = obj
                     .get("subject")
@@ -427,14 +439,124 @@ pub fn execute(
                     .map(str::trim)
                     .unwrap_or("");
                 check_slug(&format!("classifications[{idx}].subject"), subj)?;
-                if let Some(u) = obj.get("unit").and_then(Value::as_str).map(str::trim) {
+                if state.get(col::SUBJECTS, subj).is_none() {
+                    return Err(ToolError::new(
+                        ToolErrorCode::InvalidArguments,
+                        format!(
+                            "classifications[{idx}].subject '{subj}' is not a known subject; add it with lucubra_profile(action=\"answer\", field=\"subjects\") first"
+                        ),
+                    ));
+                }
+                let unit = obj.get("unit").and_then(Value::as_str).map(str::trim);
+                if let Some(u) = unit {
                     check_slug(&format!("classifications[{idx}].unit"), u)?;
                 }
+                let (path, hash) = if let Some(p) = obj.get("path").and_then(Value::as_str) {
+                    let (norm, _) = resolve_workspace_path(ctx.ws.root(), p).map_err(|e| {
+                        ToolError::new(
+                            ToolErrorCode::InvalidArguments,
+                            format!("classifications[{idx}].path: {e}"),
+                        )
+                    })?;
+                    let hash = state
+                        .get(col::PATHS, &norm)
+                        .and_then(|l| l.get("hash"))
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| {
+                            ToolError::new(
+                                ToolErrorCode::NotFound,
+                                format!(
+                                    "classifications[{idx}].path '{norm}' has not been scanned"
+                                ),
+                            )
+                        })?
+                        .to_owned();
+                    (norm, hash)
+                } else if let Some(h) = obj.get("file_hash").and_then(Value::as_str) {
+                    let hash = resolve_file_hash(&state, h)?;
+                    let path = state
+                        .collection(col::PATHS)
+                        .find(|(_, l)| l.get("hash").and_then(Value::as_str) == Some(hash.as_str()))
+                        .map(|(p, _)| p.clone())
+                        .unwrap_or_default();
+                    (path, hash)
+                } else {
+                    return Err(ToolError::new(
+                        ToolErrorCode::InvalidArguments,
+                        format!("classifications[{idx}] requires 'path' or 'file_hash'"),
+                    ));
+                };
+                let by_user = obj.get("confirmed_by_user").and_then(Value::as_bool) == Some(true);
+                planned.push((
+                    path,
+                    hash,
+                    subj.to_owned(),
+                    unit.map(str::to_owned),
+                    by_user,
+                ));
             }
-            Err(ToolError::new(
-                ToolErrorCode::NotImplemented,
-                "Classification persistence and layout moves are implemented in milestone M4.",
-            ))
+            let mut applied = 0usize;
+            let mut needs_user = Vec::new();
+            for (path, hash, subject, unit, by_user) in planned {
+                if !by_user {
+                    let engine_prior = state
+                        .get(col::FILES, &hash)
+                        .filter(|f| {
+                            f.get("classified_by").and_then(Value::as_str) == Some("engine")
+                        })
+                        .and_then(|f| f.get("subject"))
+                        .and_then(Value::as_str)
+                        .map(|s| (s.to_owned(), lucubra_ingest::classify::STRONG));
+                    let engine = engine_prior.or_else(|| {
+                        lucubra_ingest::classify::candidates_for(ctx.ws, &state, &path, &hash)
+                            .into_iter()
+                            .next()
+                            .filter(|c| c.score >= lucubra_ingest::classify::STRONG)
+                            .map(|c| (c.subject, c.score))
+                    });
+                    if let Some((engine_subject, score)) = engine
+                        && engine_subject != subject
+                    {
+                        needs_user.push(json!({
+                            "path": path,
+                            "host_subject": subject,
+                            "engine_subject": engine_subject,
+                            "engine_score": score,
+                        }));
+                        continue;
+                    }
+                }
+                let mut payload = json!({
+                    "hash": hash,
+                    "subject": subject,
+                    "by": if by_user { "user" } else { "host" },
+                });
+                if let Some(u) = unit {
+                    payload["unit"] = Value::String(u);
+                }
+                ctx.ws.append("file.classified", payload).map_err(ws_err)?;
+                applied += 1;
+            }
+            if applied > 0 {
+                ctx.ws.project().map_err(ws_err)?;
+            }
+            let next = if needs_user.is_empty() {
+                "approve_layout"
+            } else {
+                "ask_user"
+            };
+            Ok(ToolOutcome {
+                data: json!({
+                    "applied": applied,
+                    "needs_user": needs_user,
+                    "how": "For each needs_user entry, ask the user which subject is right, then resubmit it with confirmed_by_user=true.",
+                }),
+                next: Some(next.into()),
+                warnings: Vec::new(),
+                per_call_limit: limits.response_limit,
+                suppress_wrap_up: false,
+                active_session_override: None,
+            })
         }
         "items" => {
             check_keys(

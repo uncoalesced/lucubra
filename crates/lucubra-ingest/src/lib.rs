@@ -4,6 +4,7 @@
 //! File watching, hashing, format routing, worker supervision, native
 //! extractors, classification scoring and full-text indexing.
 
+pub mod classify;
 pub mod discover;
 pub mod doctor;
 pub mod eda;

@@ -225,7 +225,50 @@ fn render_subject(state: &State, slug: &str, units: &[(String, &Value)]) -> Stri
         out.push_str(&line);
         out.push('\n');
     }
+    render_subject_files(state, slug, &mut out);
     out
+}
+
+/// Files classified to this subject, linked by path so folders indexed in
+/// place (addendum A3) are reachable from the subject index.
+fn render_subject_files(state: &State, slug: &str, out: &mut String) {
+    const SHOWN: usize = 200;
+    let files: Vec<(&String, Option<&str>)> = state
+        .collection(col::PATHS)
+        .filter_map(|(path, loc)| {
+            let file = state.get(col::FILES, loc.get("hash")?.as_str()?)?;
+            (file.get("subject")?.as_str()? == slug)
+                .then(|| (path, file.get("unit").and_then(Value::as_str)))
+        })
+        .collect();
+    if files.is_empty() {
+        return;
+    }
+    out.push_str(
+        "
+## Files
+
+",
+    );
+    for (path, unit) in files.iter().take(SHOWN) {
+        match unit {
+            Some(unit) => out.push_str(&format!(
+                "- `{path}` ({unit})
+"
+            )),
+            None => out.push_str(&format!(
+                "- `{path}`
+"
+            )),
+        }
+    }
+    if files.len() > SHOWN {
+        out.push_str(&format!(
+            "- and {} more
+",
+            files.len() - SHOWN
+        ));
+    }
 }
 
 fn render_unit(state: &State, slug: &str, unit: &str, data: &Value) -> String {
@@ -370,7 +413,8 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
 
 /// A destination path that does not exist yet: `base`, else `base` with a
 /// numeric suffix before the extension.
-fn free_path(base: PathBuf) -> PathBuf {
+/// Returns `base`, or the first free `<stem>-<n><ext>` beside it.
+pub fn free_path(base: PathBuf) -> PathBuf {
     if !base.exists() {
         return base;
     }
@@ -455,7 +499,8 @@ pub struct ProjectReport {
     pub warnings: Vec<String>,
 }
 
-fn rel_string(root: &Path, path: &Path) -> String {
+/// Workspace-relative path with forward slashes.
+pub fn rel_string(root: &Path, path: &Path) -> String {
     path.strip_prefix(root)
         .unwrap_or(path)
         .components()

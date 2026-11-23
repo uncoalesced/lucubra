@@ -283,6 +283,12 @@ fn run(command: Command) -> lucubra_core::Result<()> {
             let ws = Workspace::open(&workspace_path(&target), &data_dir)?;
             print_scan(&lucubra_ingest::scan(&ws)?);
             run_extract(&ws, lucubra_ingest::doctor::check_tools())?;
+            let classified = lucubra_ingest::classify::classify_pending(&ws, true)?;
+            println!(
+                "classified by engine: {}, waiting for the assistant: {}",
+                classified.engine.len(),
+                classified.batch.len()
+            );
         }
         Command::Doctor(target) => {
             let status = lucubra_ingest::doctor::check_tools();
