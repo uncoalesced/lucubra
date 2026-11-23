@@ -11,6 +11,7 @@ pub mod hlc;
 pub mod log;
 pub mod organise;
 pub mod paths;
+pub mod planner;
 pub mod projection;
 pub mod replay;
 pub mod state;
