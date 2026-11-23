@@ -37,6 +37,8 @@ pub mod col {
     pub const TRANSCRIPTS: &str = "transcripts";
     /// Study sessions by session id (and unattached progress under `_unattached`).
     pub const SESSIONS: &str = "sessions";
+    /// File moves by move id: hash, from, to, batch, and `undone` once reversed.
+    pub const MOVES: &str = "moves";
 }
 
 /// Event types the engine folds into state. Other known types are stored in
@@ -56,6 +58,9 @@ pub const FOLDED_TYPES: &[&str] = &[
     "file.seen",
     "file.extracted",
     "file.failed",
+    "file.classified",
+    "file.moved",
+    "file.move_undone",
     "transcript.saved",
     "transcript.verified",
     "session.started",
@@ -249,6 +254,43 @@ impl State {
                     file.insert("status".into(), Value::String(outcome.to_owned()));
                 }
                 self.merge(col::FILES, hash, &file);
+            }
+            "file.classified" => {
+                let hash = str_field(data, "hash").ok_or(Skip::BadPayload("hash"))?;
+                let subject = str_field(data, "subject").ok_or(Skip::BadPayload("subject"))?;
+                self.touch_subject(subject, None);
+                let mut file = Map::new();
+                file.insert("subject".into(), Value::String(subject.to_owned()));
+                file.insert(
+                    "unit".into(),
+                    str_field(data, "unit").map_or(Value::Null, |u| Value::String(u.to_owned())),
+                );
+                file.insert(
+                    "classified_by".into(),
+                    Value::String(str_field(data, "by").unwrap_or("engine").to_owned()),
+                );
+                self.merge(col::FILES, hash, &file);
+            }
+            "file.moved" | "file.move_undone" => {
+                let id = str_field(data, "move_id").ok_or(Skip::BadPayload("move_id"))?;
+                let from = str_field(data, "from").ok_or(Skip::BadPayload("from"))?;
+                let to = str_field(data, "to").ok_or(Skip::BadPayload("to"))?;
+                let location = match self.get(col::PATHS, from) {
+                    Some(Value::Object(map)) => map.clone(),
+                    _ => Map::new(),
+                };
+                self.remove(col::PATHS, from);
+                self.put(col::PATHS, to, Value::Object(location));
+                if event.kind == "file.moved" {
+                    let mut entry = fields.clone();
+                    entry.remove("move_id");
+                    entry.insert("undone".into(), Value::Bool(false));
+                    self.put(col::MOVES, id, Value::Object(entry));
+                } else {
+                    let mut entry = Map::new();
+                    entry.insert("undone".into(), Value::Bool(true));
+                    self.merge(col::MOVES, id, &entry);
+                }
             }
             "transcript.saved" => {
                 let hash = str_field(data, "hash").ok_or(Skip::BadPayload("hash"))?;
