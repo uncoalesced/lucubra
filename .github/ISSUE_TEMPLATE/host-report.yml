@@ -1,0 +1,81 @@
+name: Host compatibility report
+description: Report how Lucubra works, or fails, with an AI host
+title: "host: "
+labels: ["host-compatibility", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form when an AI host connects, fails to connect, or behaves differently from its host page in docs/hosts/. Do not paste study material, grades, personal details or credentials.
+  - type: input
+    id: host
+    attributes:
+      label: Host
+      description: Name of the host, for example Claude Desktop or LM Studio
+    validations:
+      required: true
+  - type: input
+    id: host_version
+    attributes:
+      label: Host version
+      description: Shown in the host's About or settings page
+    validations:
+      required: true
+  - type: dropdown
+    id: plan_tier
+    attributes:
+      label: Plan tier
+      description: The plan you use with the host. Choose local for a model that runs on your machine.
+      options:
+        - free
+        - paid
+        - local
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: lucubra_version
+    attributes:
+      label: Lucubra version
+      description: Output of `lucubra --version`
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What you did
+      description: How you added Lucubra to the host, and what you asked the assistant to do
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: Include whether the host listed the Lucubra tools, and whether lucubra_orient ran
+    validations:
+      required: true
+  - type: textarea
+    id: error_text
+    attributes:
+      label: Error text
+      description: Paste the error text from the host or from lucubra. Remove file names or content you do not want to share.
+      render: text
+  - type: checkboxes
+    id: privacy_check
+    attributes:
+      label: Privacy check
+      options:
+        - label: I have removed study material, grades, personal details and credentials from this report.
+          required: true
+        - label: I have checked any attached log before posting it.
+          required: true
