@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "lucubra"
 dynamic = ["version"]
 description = "Local-first study engine for students using any AI assistant"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 keywords = ["study", "mcp", "local-first", "spaced-repetition"]
@@ -44,7 +44,7 @@ pythonpath = ["python", "scripts"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
