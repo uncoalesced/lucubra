@@ -5,6 +5,7 @@
 
 pub mod appdata;
 pub mod cache;
+pub mod calendar;
 pub mod error;
 pub mod event;
 pub mod hlc;
