@@ -1,0 +1,9 @@
+[project]
+name = "lucubra-mcpb"
+version = "1.0.0b1"
+description = "MCPB wrapper that installs the lucubra package with uv."
+requires-python = ">=3.10"
+dependencies = ["lucubra==1.0.0b1"]
+
+[tool.uv]
+prerelease = "allow"
