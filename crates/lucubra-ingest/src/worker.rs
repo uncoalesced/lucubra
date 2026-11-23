@@ -55,22 +55,46 @@ impl WorkerSpec {
 pub const PYTHON_ENV: &str = "LUCUBRA_PYTHON";
 
 /// Finds the Python that runs `lucubra_workers`: `LUCUBRA_PYTHON` if set,
-/// otherwise the interpreter installed next to the `lucubra` binary (the
-/// layout of a wheel install in a virtual environment or a `uv tool`).
+/// otherwise the interpreter installed next to the `lucubra` binary (a wheel
+/// install in a virtual environment), otherwise the `uv tool` environment
+/// (on Windows `uv tool install` copies the launcher away from its venv).
 pub fn find_python() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os(PYTHON_ENV) {
         return Some(PathBuf::from(path));
     }
     let exe = std::env::current_exe().ok()?;
-    let dir = exe.parent()?;
-    let names: &[&str] = if cfg!(windows) {
-        &["python.exe"]
+    find_python_in(exe.parent()?, uv_tool_dir().as_deref())
+}
+
+/// The `uv tool` directory: `UV_TOOL_DIR`, else uv's platform default.
+///
+/// shortcut: pipx and other launchers are not searched; `LUCUBRA_PYTHON`
+/// covers them until a tester reports one.
+fn uv_tool_dir() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("UV_TOOL_DIR") {
+        return Some(PathBuf::from(dir));
+    }
+    if cfg!(windows) {
+        std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join("uv").join("tools"))
     } else {
-        &["python3", "python"]
+        std::env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
+            .map(|d| d.join("uv").join("tools"))
+    }
+}
+
+/// Searches `exe_dir`, then `<tool_dir>/lucubra`'s interpreter.
+fn find_python_in(exe_dir: &Path, tool_dir: Option<&Path>) -> Option<PathBuf> {
+    let (names, venv_bin): (&[&str], &str) = if cfg!(windows) {
+        (&["python.exe"], "Scripts")
+    } else {
+        (&["python3", "python"], "bin")
     };
-    names
-        .iter()
-        .map(|name| dir.join(name))
+    let tool_bin = tool_dir.map(|d| d.join("lucubra").join(venv_bin));
+    std::iter::once(exe_dir.to_path_buf())
+        .chain(tool_bin)
+        .flat_map(|dir| names.iter().map(move |name| dir.join(name)))
         .find(|candidate| candidate.is_file())
 }
 
@@ -259,5 +283,34 @@ impl Drop for Supervisor {
         if let Some(running) = self.running.take() {
             running.stop();
         }
+    }
+}
+
+#[cfg(test)]
+mod find_python_tests {
+    use super::*;
+
+    #[test]
+    fn find_python_falls_back_to_the_uv_tool_venv() {
+        let bin = tempfile::tempdir().unwrap();
+        let tools = tempfile::tempdir().unwrap();
+        assert_eq!(find_python_in(bin.path(), Some(tools.path())), None);
+        let (name, sub) = if cfg!(windows) {
+            ("python.exe", "Scripts")
+        } else {
+            ("python3", "bin")
+        };
+        let venv = tools.path().join("lucubra").join(sub);
+        std::fs::create_dir_all(&venv).unwrap();
+        std::fs::write(venv.join(name), b"").unwrap();
+        assert_eq!(
+            find_python_in(bin.path(), Some(tools.path())),
+            Some(venv.join(name))
+        );
+        std::fs::write(bin.path().join(name), b"").unwrap();
+        assert_eq!(
+            find_python_in(bin.path(), Some(tools.path())),
+            Some(bin.path().join(name))
+        );
     }
 }
