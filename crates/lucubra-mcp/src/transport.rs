@@ -59,6 +59,8 @@ pub fn build_streamable_http_service(
 }
 
 /// Asynchronous Streamable HTTP entrypoint enforcing loopback bind (SPEC section 4.4).
+// shortcut: builds the service but binds no listener, so it serves nothing; wire a
+// loopback TCP listener before any CLI flag enables `http-transport` (D14).
 #[cfg(feature = "http-transport")]
 pub async fn serve_streamable_http(
     options: crate::server::ServerOptions,
