@@ -61,6 +61,7 @@ const OPTIONAL_FIELDS: &[&str] = &[
     "teaching_style",
     "timezone",
     "host_notes",
+    "calendar_ical_url",
 ];
 
 fn field_prompt(field: &str) -> (&'static str, &'static str) {
@@ -125,6 +126,22 @@ fn validate_and_apply_field(
                     "profile.set",
                     json!({ "plan_tier": s.to_ascii_lowercase() }),
                 )
+                .map_err(ws_err)?;
+        }
+        "calendar_ical_url" => {
+            // The address works like a password: app data only, never an event (S24).
+            let url = val.as_str().map(str::trim).unwrap_or("");
+            if !url.is_empty() && !url.starts_with("https://") {
+                return Err(ToolError::new(
+                    ToolErrorCode::InvalidArguments,
+                    "calendar_ical_url must be an https:// iCal address, or empty to remove it",
+                ));
+            }
+            lucubra_core::calendar::store_url(ctx.ws, (!url.is_empty()).then_some(url))
+                .map_err(ws_err)?;
+            let mode = if url.is_empty() { "none" } else { "ical" };
+            ctx.ws
+                .append("profile.set", json!({ "calendar": mode }))
                 .map_err(ws_err)?;
         }
         "schedule_planning" | "local_model" => {
@@ -343,7 +360,10 @@ pub fn execute(
                     "missing_required": missing,
                 }),
                 next: Some(
-                    if missing.is_empty() {
+                    if field == "exams" && has_accepted_plan(&state) {
+                        // An exam change re-plans; the calendar file is already regenerated (S33).
+                        "replan"
+                    } else if missing.is_empty() {
                         "ready"
                     } else {
                         "answer"
@@ -490,4 +510,10 @@ fn subject_suggestions(state: &lucubra_core::state::State) -> Value {
         joined.push(',');
     }
     crate::elicit::subjects_value(&joined)
+}
+
+fn has_accepted_plan(state: &lucubra_core::state::State) -> bool {
+    state
+        .collection(col::PLANS)
+        .any(|(_, p)| p.get("status").and_then(Value::as_str) == Some("accepted"))
 }
