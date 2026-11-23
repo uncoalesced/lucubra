@@ -200,12 +200,7 @@ pub fn extract_blend(
         .map_err(|e| err("corrupt", format!("writing blender helper: {e}"), None))?;
 
     let mut cmd = Command::new(tool_path);
-    cmd.arg("--background")
-        .arg(blend_path)
-        .arg("--python")
-        .arg(&script_path)
-        .arg("--")
-        .arg(&out_json);
+    cmd.args(blender_args(blend_path, &script_path, &out_json));
     run_with_timeout(cmd, timeout, "blender")?;
 
     let raw = fs::read_to_string(&out_json)
@@ -282,4 +277,31 @@ pub fn extract_blend(
         units_hint: hints,
         ..Extracted::default()
     })
+}
+
+/// Blender arguments for headless extraction; `--disable-autoexec` stops
+/// scripts embedded in an untrusted `.blend` from running.
+fn blender_args(blend: &Path, script: &Path, out_json: &Path) -> Vec<std::ffi::OsString> {
+    vec![
+        "--background".into(),
+        "--disable-autoexec".into(),
+        blend.into(),
+        "--python".into(),
+        script.into(),
+        "--".into(),
+        out_json.into(),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn blender_never_autoexecutes_embedded_scripts() {
+        let args = blender_args(Path::new("a.blend"), Path::new("s.py"), Path::new("o.json"));
+        let disable = args.iter().position(|a| a == "--disable-autoexec").unwrap();
+        let file = args.iter().position(|a| a == "a.blend").unwrap();
+        assert!(disable < file, "autoexec must be off before the file loads");
+    }
 }
