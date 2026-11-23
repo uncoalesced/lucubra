@@ -28,3 +28,8 @@ allow-wildcard-paths = true
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
+
+[advisories]
+ignore = [
+    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained with no safe upgrade; reached only through rmcp and schemars, revisit when rmcp drops it" },
+]
