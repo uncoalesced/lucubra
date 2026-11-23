@@ -278,6 +278,7 @@ pub fn execute(
                     "prompt": (!prompt.is_empty()).then_some(prompt),
                     "example": (!example.is_empty()).then_some(example),
                     "missing_required": missing,
+                    "suggestions": (next_field == Some("subjects")).then(|| subject_suggestions(&state)),
                 }),
                 next: Some(
                     if missing.is_empty() {
@@ -464,4 +465,29 @@ pub fn execute(
         }
         _ => unreachable!(),
     }
+}
+
+/// Subjects inferred from top-level folder names, for the user to confirm
+/// (SPEC section 9: inferred from folders and file names, then confirmed).
+fn subject_suggestions(state: &lucubra_core::state::State) -> Value {
+    const SKIP: &[&str] = &[
+        "inbox",
+        "subjects",
+        "schedule",
+        "sessions",
+        "packs",
+        "dashboard",
+        ".lucubra",
+    ];
+    let folders: std::collections::BTreeSet<&str> = state
+        .collection(col::PATHS)
+        .filter_map(|(path, _)| path.split_once('/').map(|(top, _)| top))
+        .filter(|top| !SKIP.contains(&top.to_lowercase().as_str()))
+        .collect();
+    let mut joined = String::new();
+    for folder in folders.iter().take(20) {
+        joined.push_str(&folder.replace([',', ';'], " "));
+        joined.push(',');
+    }
+    crate::elicit::subjects_value(&joined)
 }
