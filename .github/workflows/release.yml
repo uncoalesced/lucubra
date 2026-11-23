@@ -1,7 +1,8 @@
 name: release
 
-# Tag push `v*` builds and publishes. workflow_dispatch builds only and never
-# publishes, whatever dry_run says, because publishing requires a tag push.
+# Tag push `v*` builds and publishes. Pull requests that touch this workflow or
+# packaging/ and workflow_dispatch build only and never publish, whatever dry_run
+# says, because publishing requires a tag push.
 #
 # Version mapping: Cargo/semver `1.0.0-beta.1` is the same release as PEP 440
 # `1.0.0b1` (alpha -> a, beta -> b, rc -> rc). A tag may use either spelling,
@@ -10,6 +11,8 @@ name: release
 on:
   push:
     tags: ["v*"]
+  pull_request:
+    paths: [".github/workflows/release.yml", "packaging/**"]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -38,7 +41,7 @@ jobs:
       - uses: actions/checkout@v4
       - id: v
         env:
-          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
         run: |
           python3 - <<'PY'
@@ -49,7 +52,7 @@ jobs:
               raise SystemExit(f"unsupported Cargo version: {ver}")
           base, pre, n = m.groups()
           pep = base + ({"alpha": "a", "beta": "b", "rc": "rc"}[pre] + n if pre else "")
-          tag_push = os.environ["EVENT"] == "push"
+          tag_push = os.environ["REF_TYPE"] == "tag"
           if tag_push:
               tag = os.environ["REF_NAME"].removeprefix("v")
               if tag not in (ver, pep):
