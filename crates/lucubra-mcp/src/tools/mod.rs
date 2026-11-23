@@ -143,7 +143,7 @@ pub fn build_tools() -> Vec<Tool> {
         ),
         tool_def::<plan::PlanArgs>(
             "lucubra_plan",
-            "Create, adjust, or accept study schedules and multi-day horizons (actions: propose, edit, accept, horizon; full scheduler lands in M5).",
+            "Plan study time: propose a schedule from exams, material and busy time, edit it, accept it (writes schedule/lucubra-plan.ics), view a 30-day horizon, or get what to study now (actions: propose, edit, accept, horizon, next).",
             false,
             false,
         ),
