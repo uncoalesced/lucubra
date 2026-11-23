@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest a change in behaviour or a new capability
+title: "feat: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the study problem first, then the change. Do not include study material in the request.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what gets in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+  - type: dropdown
+    id: data
+    attributes:
+      label: Does this change what data Lucubra reads, writes or sends?
+      options:
+        - "No"
+        - "Yes, it reads more data"
+        - "Yes, it writes more data"
+        - "Yes, it sends data outside the machine"
+    validations:
+      required: true
