@@ -94,11 +94,11 @@ fn write_fake_blender(dir: &Path) -> PathBuf {
     fs::write(&payload, scene_json).unwrap();
     if cfg!(windows) {
         let script = dir.join("blender.cmd");
-        // Args: --background <blend> --python <script> -- <out_json>
+        // Args: --background --disable-autoexec <blend> --python <script> -- <out_json>
         fs::write(
             &script,
             format!(
-                "@echo off\r\ncopy /Y \"{}\" \"%~6\" >nul\r\n",
+                "@echo off\r\ncopy /Y \"{}\" \"%~7\" >nul\r\n",
                 payload.display()
             ),
         )
@@ -111,7 +111,7 @@ fn write_fake_blender(dir: &Path) -> PathBuf {
             let script = dir.join("blender");
             fs::write(
                 &script,
-                format!("#!/bin/sh\ncp \"{}\" \"$6\"\n", payload.display()),
+                format!("#!/bin/sh\ncp \"{}\" \"$7\"\n", payload.display()),
             )
             .unwrap();
             let mut perms = fs::metadata(&script).unwrap().permissions();
