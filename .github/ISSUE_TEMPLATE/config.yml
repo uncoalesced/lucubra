@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/uncoalesced/lucubra/security
+    about: Report vulnerabilities privately through GitHub. Do not open a public issue for them.
+  - name: Documentation
+    url: https://github.com/uncoalesced/lucubra/blob/main/README.md
+    about: Read the README, the getting started guide and the troubleshooting guide before reporting a problem.
