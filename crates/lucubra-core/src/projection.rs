@@ -329,6 +329,17 @@ pub fn session_handoff_path(started_ts: &str, slug: &str) -> Option<String> {
     Some(format!("sessions/SESSION_{date}_{hhmm}_{slug}.md"))
 }
 
+/// Handoff file path for an ended session, or `None` while it is open.
+pub fn session_file(session: &Value) -> Option<String> {
+    if text(session, "status").as_deref() != Some("ended") {
+        return None;
+    }
+    let slug = text(session, "last_unit")
+        .or_else(|| list(session, "units").into_iter().next())
+        .unwrap_or_default();
+    session_handoff_path(&text(session, "started_ts")?, &slug)
+}
+
 fn render_session(data: &Value) -> String {
     let get = |k: &str| text(data, k);
     let num = |k: &str| data.get(k).and_then(Value::as_u64).unwrap_or(0);
@@ -502,15 +513,7 @@ pub fn render(state: &State) -> Rendered {
         }
     }
     for (_, session) in state.collection(col::SESSIONS) {
-        if text(session, "status").as_deref() != Some("ended") {
-            continue;
-        }
-        let slug = text(session, "last_unit")
-            .or_else(|| list(session, "units").into_iter().next())
-            .unwrap_or_default();
-        if let Some(path) =
-            text(session, "started_ts").and_then(|ts| session_handoff_path(&ts, &slug))
-        {
+        if let Some(path) = session_file(session) {
             rendered.files.insert(path, render_session(session));
         }
     }
