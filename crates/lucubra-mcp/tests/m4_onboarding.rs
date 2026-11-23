@@ -432,7 +432,6 @@ fn stdio_onboard(ws: &Path, data: &Path, reply: Value) -> Value {
             break msg;
         }
     };
-    drop(send);
     let _ = child.kill();
     let _ = child.wait();
     assert_eq!(forms, 1, "exactly one onboarding form");
