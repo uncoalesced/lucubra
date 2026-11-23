@@ -1,0 +1,11 @@
+{
+  "name": "lucubra",
+  "displayName": "Lucubra",
+  "version": "1.0.0-beta.1",
+  "description": "Registers the Lucubra local-first study engine as an MCP server.",
+  "author": { "name": "uncoalesced", "url": "https://github.com/uncoalesced" },
+  "homepage": "https://github.com/uncoalesced/lucubra",
+  "repository": "https://github.com/uncoalesced/lucubra",
+  "license": "Apache-2.0",
+  "keywords": ["study", "mcp", "local-first"]
+}

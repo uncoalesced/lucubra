@@ -1,0 +1,41 @@
+{
+  "manifest_version": "0.4",
+  "name": "lucubra",
+  "display_name": "Lucubra",
+  "version": "1.0.0-beta.1",
+  "description": "Local-first study engine: indexes your course files and gives your AI assistant grounded study tools.",
+  "long_description": "Lucubra runs entirely on your machine. It reads the study folder you choose, builds a local index, and exposes planning, search and practice tools to Claude over MCP. Nothing is uploaded by Lucubra itself.",
+  "author": {
+    "name": "uncoalesced",
+    "url": "https://github.com/uncoalesced"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/uncoalesced/lucubra"
+  },
+  "homepage": "https://github.com/uncoalesced/lucubra",
+  "documentation": "https://github.com/uncoalesced/lucubra/blob/main/docs/getting-started.md",
+  "support": "https://github.com/uncoalesced/lucubra/issues",
+  "icon": "icon.png",
+  "license": "Apache-2.0",
+  "keywords": ["study", "education", "local-first", "spaced-repetition"],
+  "server": {
+    "type": "uv",
+    "entry_point": "pyproject.toml",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "--directory", "${__dirname}", "lucubra", "mcp", "--workspace", "${user_config.workspace}"]
+    }
+  },
+  "user_config": {
+    "workspace": {
+      "type": "directory",
+      "title": "Study folder",
+      "description": "The folder Lucubra indexes and keeps its .lucubra state in.",
+      "required": true
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"]
+  }
+}

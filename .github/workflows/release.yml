@@ -1,0 +1,246 @@
+name: release
+
+# Tag push `v*` builds and publishes. Pull requests that touch this workflow or
+# packaging/ and workflow_dispatch build only and never publish, whatever dry_run
+# says, because publishing requires a tag push.
+#
+# Version mapping: Cargo/semver `1.0.0-beta.1` is the same release as PEP 440
+# `1.0.0b1` (alpha -> a, beta -> b, rc -> rc). A tag may use either spelling,
+# `v1.0.0-beta.1` or `v1.0.0b1`, and must equal the workspace version in Cargo.toml.
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths: [".github/workflows/release.yml", "packaging/**"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build everything but skip publishing
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      pep440: ${{ steps.v.outputs.pep440 }}
+      publish: ${{ steps.v.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os, re, tomllib
+          ver = tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"]
+          m = re.fullmatch(r"(\d+\.\d+\.\d+)(?:-(alpha|beta|rc)\.(\d+))?", ver)
+          if not m:
+              raise SystemExit(f"unsupported Cargo version: {ver}")
+          base, pre, n = m.groups()
+          pep = base + ({"alpha": "a", "beta": "b", "rc": "rc"}[pre] + n if pre else "")
+          tag_push = os.environ["REF_TYPE"] == "tag"
+          if tag_push:
+              tag = os.environ["REF_NAME"].removeprefix("v")
+              if tag not in (ver, pep):
+                  raise SystemExit(f"tag {tag!r} does not match Cargo.toml version {ver!r} (PEP 440 {pep!r})")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"version={ver}\npep440={pep}\npublish={'true' if tag_push else 'false'}\n")
+          print(f"Cargo {ver} = PEP 440 {pep}; publish={tag_push}")
+          PY
+
+  wheels:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: linux-x86_64
+            os: ubuntu-latest
+            target: x86_64
+            manylinux: auto
+          - id: linux-aarch64
+            os: ubuntu-24.04-arm
+            target: aarch64
+            manylinux: auto
+          - id: macos-x86_64
+            os: macos-15-intel
+            target: x86_64
+            manylinux: "off"
+          - id: macos-arm64
+            os: macos-latest
+            target: aarch64
+            manylinux: "off"
+          - id: windows-x86_64
+            os: windows-latest
+            target: x64
+            manylinux: "off"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release --out dist
+      - uses: astral-sh/setup-uv@v5
+      - name: Smoke test wheel
+        shell: bash
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          out="$(uvx --from "$(ls dist/*.whl)" lucubra --version)"
+          echo "$out"
+          test "$out" = "lucubra $VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.id }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  sdist:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  mcpb:
+    needs: [check, wheels]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheel-linux-x86_64
+          path: wheels
+      - name: Stage bundle sources
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          PEP: ${{ needs.check.outputs.pep440 }}
+          PUBLISH: ${{ needs.check.outputs.publish }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, re, shutil
+          src, dst = pathlib.Path("packaging/mcpb"), pathlib.Path("stage")
+          dst.mkdir()
+          manifest = json.loads((src / "manifest.json").read_text())
+          manifest["version"] = os.environ["VERSION"]
+          icon = pathlib.Path("docs/assets/icon-512.png")
+          if icon.exists():
+              shutil.copy(icon, dst / "icon.png")
+          elif os.environ["PUBLISH"] == "true":
+              raise SystemExit("docs/assets/icon-512.png is required for a tagged release")
+          else:
+              print("::warning::docs/assets/icon-512.png missing; bundle built without an icon (dry run)")
+              manifest.pop("icon", None)
+          (dst / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          pyproject = (src / "pyproject.toml").read_text()
+          pyproject = re.sub(r'(?m)^version = ".*"$', f'version = "{os.environ["PEP"]}"', pyproject)
+          pyproject = re.sub(r'"lucubra==[^"]+"', f'"lucubra=={os.environ["PEP"]}"', pyproject)
+          (dst / "pyproject.toml").write_text(pyproject)
+          PY
+      - name: Validate and pack
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          npx --yes @anthropic-ai/mcpb@2.1.2 validate stage/manifest.json
+          mkdir out
+          npx --yes @anthropic-ai/mcpb@2.1.2 pack stage "out/lucubra-$VERSION.mcpb"
+      - name: Smoke test packed bundle
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          UV_FIND_LINKS: ${{ github.workspace }}/wheels
+        run: |
+          unzip -q "out/lucubra-$VERSION.mcpb" -d verify
+          test "$(uv run --directory verify lucubra --version)" = "lucubra $VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcpb
+          path: out/*.mcpb
+          if-no-files-found: error
+
+  checksums:
+    needs: [wheels, sdist, mcpb]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dl
+          merge-multiple: true
+      - name: Write SHA256SUMS
+        run: |
+          mkdir release
+          cp dl/* release/
+          cd release
+          sha256sum -- * | tee SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: release/*
+          if-no-files-found: error
+
+  pypi:
+    if: needs.check.outputs.publish == 'true'
+    needs: [check, checksums]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/lucubra
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: dist
+      - name: Keep only wheels and sdist
+        run: rm -f dist/SHA256SUMS dist/*.mcpb
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    if: needs.check.outputs.publish == 'true'
+    needs: [check, pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: release
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          flags=(--verify-tag --title "Lucubra $VERSION" --generate-notes)
+          case "$VERSION" in *-*) flags+=(--prerelease) ;; esac
+          gh release create "$TAG" "${flags[@]}" release/*
