@@ -97,6 +97,12 @@ pub fn execute(
     limits: BudgetLimits,
 ) -> std::result::Result<ToolOutcome, ToolError> {
     check_keys(args, &["progress"], "lucubra_orient")?;
+    let recovered = crate::tools::session::recover_idle(ctx.ws).map_err(|e| {
+        ToolError::new(
+            ToolErrorCode::WorkspaceError,
+            format!("session recovery failed: {e}"),
+        )
+    })?;
 
     let state = ctx
         .ws
@@ -159,10 +165,20 @@ pub fn execute(
     }
     let total_subjects = all_subjects.len();
 
+    // An open session, or the latest one if it was closed as recovered, is
+    // offered for resumption (SPEC section 15).
+    // The latest session (ids are ULIDs, so key order is start order) is
+    // offered for resumption when it is open or was closed as recovered.
     let interrupted_session = state
         .collection(col::SESSIONS)
+        .filter(|(k, _)| k.as_str() != "_unattached")
+        .last()
         .filter(|(k, v)| {
-            k.as_str() != "_unattached" && v.get("status").and_then(Value::as_str) == Some("active")
+            let status = v.get("status").and_then(Value::as_str);
+            let reason = v.get("reason").and_then(Value::as_str);
+            status == Some("active")
+                || recovered.contains(*k)
+                || (status == Some("ended") && reason == Some("recovered"))
         })
         .map(|(k, v)| {
             json!({
@@ -171,8 +187,7 @@ pub fn execute(
                 "style": v.get("style"),
                 "logged_minutes": v.get("logged_minutes"),
             })
-        })
-        .next();
+        });
 
     let mut compact_profile = Map::new();
     if let Some(prof) = state.collections.get(col::PROFILE) {
