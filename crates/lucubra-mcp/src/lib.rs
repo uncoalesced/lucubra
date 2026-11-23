@@ -5,6 +5,7 @@
 //! detection and response budgets.
 
 pub mod budget;
+pub mod elicit;
 pub mod envelope;
 pub mod host;
 pub mod instructions;
