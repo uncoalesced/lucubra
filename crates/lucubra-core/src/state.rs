@@ -295,9 +295,6 @@ impl State {
                     "classified_by".into(),
                     Value::String(str_field(data, "by").unwrap_or("engine").to_owned()),
                 );
-                if let Some(suggested) = data.get("assessment_suggested").and_then(Value::as_bool) {
-                    file.insert("assessment_suggested".into(), Value::Bool(suggested));
-                }
                 self.merge(col::FILES, hash, &file);
             }
             "file.moved" | "file.move_undone" => {
