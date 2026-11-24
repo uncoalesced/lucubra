@@ -12,6 +12,7 @@ lucubra-core.workspace = true
 blake3.workspace = true
 lucubra-ingest.workspace = true
 serde_json.workspace = true
+ulid.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
