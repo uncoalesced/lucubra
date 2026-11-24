@@ -17,6 +17,7 @@ pub mod paths;
 pub mod planner;
 pub mod projection;
 pub mod replay;
+pub mod srs;
 pub mod state;
 pub mod workspace;
 
