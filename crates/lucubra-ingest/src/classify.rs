@@ -260,6 +260,59 @@ pub fn candidates_for(ws: &Workspace, state: &State, path: &str, hash: &str) -> 
     }
 }
 
+/// Words in a file name or first heading that mark graded coursework
+/// (SPEC tutor mode, S26). The user confirms before tutor mode applies.
+const ASSESSMENT_WORDS: &[&str] = &[
+    "assignment",
+    "homework",
+    "coursework",
+    "assessment",
+    "take home",
+    "lab report",
+    "problem set",
+];
+
+/// Whether a path or heading looks like a graded assessment.
+pub fn looks_like_assessment(path: &str, head: &str) -> bool {
+    let flat = |s: &str| {
+        s.to_lowercase()
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let file = path.rsplit('/').next().unwrap_or(path);
+    let first_line = head.lines().next().unwrap_or_default();
+    let text = format!(" {} {} ", flat(file), flat(first_line));
+    ASSESSMENT_WORDS
+        .iter()
+        .any(|w| text.contains(&format!(" {w} ")))
+}
+
+/// Files that look like assessments and have no confirmed tag yet, as
+/// `(path, hash)`, for the user to confirm or decline.
+pub fn assessment_suggestions(ws: &Workspace, state: &State) -> Vec<(String, String)> {
+    let index = open_index(ws).ok();
+    let mut seen = BTreeSet::new();
+    let mut out = Vec::new();
+    for (path, location) in state.collection(col::PATHS) {
+        let Some(hash) = location.get("hash").and_then(Value::as_str) else {
+            continue;
+        };
+        let confirmed = state
+            .get(col::FILES, hash)
+            .and_then(|f| f.get("assessment_confirmed"))
+            .is_some();
+        if confirmed || !seen.insert(hash.to_owned()) {
+            continue;
+        }
+        if looks_like_assessment(path, &head_text(index.as_ref(), hash)) {
+            out.push((path.clone(), hash.to_owned()));
+        }
+    }
+    out
+}
+
 /// Classifies every scanned file that has no subject yet. With `write`, the
 /// engine's confident decisions are logged as `file.classified` events;
 /// either way the rest come back as one host batch.
@@ -361,5 +414,22 @@ mod tests {
             classify("Income Tax/IT NOTES.pdf", "", &subjects),
             Verdict::Engine(c) if c.subject == "income-tax"
         ));
+    }
+
+    #[test]
+    fn classify_assessment_from_name_or_heading() {
+        assert!(looks_like_assessment("inbox/assignment 3.pdf", ""));
+        assert!(looks_like_assessment("inbox/CS101_Homework-2.docx", ""));
+        assert!(looks_like_assessment(
+            "inbox/x.pdf",
+            "Take-home exam, due Friday
+Q1"
+        ));
+        assert!(looks_like_assessment("subjects/bio/Lab_Report_4.docx", ""));
+        assert!(!looks_like_assessment(
+            "inbox/lecture 3.pdf",
+            "Assignments are due on Moodle"
+        ));
+        assert!(!looks_like_assessment("inbox/reassignment-notes.pdf", ""));
     }
 }
