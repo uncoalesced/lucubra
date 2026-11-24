@@ -182,7 +182,10 @@ fn quantity(v: &Value, default_unit: Option<&str>) -> Option<(f64, Option<String
         }
         Value::Object(o) => {
             let value = o.get("value")?.as_f64()?;
-            Some((value, pick(o.get("unit").and_then(Value::as_str).unwrap_or(""))))
+            Some((
+                value,
+                pick(o.get("unit").and_then(Value::as_str).unwrap_or("")),
+            ))
         }
         _ => None,
     }
@@ -321,7 +324,8 @@ mod tests {
             Graded::Host => panic!("multi is engine-graded"),
         }
 
-        let cloze = json!({"type": "cloze", "answer": "mitochondria", "accepted": ["mitochondrion"]});
+        let cloze =
+            json!({"type": "cloze", "answer": "mitochondria", "accepted": ["mitochondrion"]});
         assert!(ok(&cloze, json!("  Mitochondrion. ")));
         assert!(!ok(&cloze, json!("nucleus")));
         let two = json!({"type": "cloze", "answer": ["ATP", "NADPH"],
@@ -351,7 +355,8 @@ mod tests {
 
     #[test]
     fn grader_numeric_tolerance_and_units() {
-        let abs = json!({"type": "numeric", "answer": 9.81, "unit": "m", "tolerance": {"abs": 0.05}});
+        let abs =
+            json!({"type": "numeric", "answer": 9.81, "unit": "m", "tolerance": {"abs": 0.05}});
         assert!(ok(&abs, json!(9.8)));
         assert!(!ok(&abs, json!(9.7)));
 
@@ -366,7 +371,8 @@ mod tests {
         assert!(!ok(&conv, json!("2500 s")));
         assert!(!ok(&conv, json!("2500 furlong")));
 
-        let temp = json!({"type": "numeric", "answer": "100 \u{00B0}C", "tolerance": {"abs": 0.01}});
+        let temp =
+            json!({"type": "numeric", "answer": "100 \u{00B0}C", "tolerance": {"abs": 0.01}});
         assert!(ok(&temp, json!("373.15 K")));
         assert!(ok(&temp, json!("212 \u{00B0}F")));
     }
