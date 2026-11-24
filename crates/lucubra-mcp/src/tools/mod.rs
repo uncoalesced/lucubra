@@ -119,7 +119,7 @@ pub fn build_tools() -> Vec<Tool> {
         ),
         tool_def::<ingest::IngestArgs>(
             "lucubra_ingest",
-            "Scan inbox/ files, check extraction/vision status, or page pending vision items (actions: scan, status, approve_layout, undo_moves, fetch).",
+            "Scan inbox/ files, check extraction/vision status, page pending vision items, or ingest a pasted Pack-mode handoff block (actions: scan, status, approve_layout, undo_moves, handoff, fetch).",
             false,
             false,
         ),
@@ -161,7 +161,7 @@ pub fn build_tools() -> Vec<Tool> {
         ),
         tool_def::<export::ExportArgs>(
             "lucubra_export",
-            "Generate session briefs and host-appropriate exports (actions: brief, pack, anki, ics, dashboard, mock_test).",
+            "Generate session briefs and exports: the Pack-mode study pack, Anki decks and the calendar file (actions: brief, pack, anki, ics, dashboard, mock_test).",
             false,
             false,
         ),
