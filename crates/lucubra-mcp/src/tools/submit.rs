@@ -246,78 +246,6 @@ fn item_key(unit: &str, obj: &Map<String, Value>) -> String {
     format!("ik_{}", &digest.to_hex()[..16])
 }
 
-/// Verifies every source of a strict item against the index (SPEC section
-/// 13.2, D53). Returns the grounding label or the first failure reason.
-fn ground_sources(
-    state: &State,
-    index: Option<&lucubra_ingest::index::Index>,
-    sources: &[Value],
-) -> std::result::Result<&'static str, String> {
-    use lucubra_core::grounding::{verify_cell, verify_name, verify_text};
-    let index = index.ok_or("the search index is unavailable; run lucubra_ingest scan first")?;
-    let mut transcript_only = true;
-    for (sidx, src) in sources.iter().enumerate() {
-        let fail = |reason: String| format!("sources[{sidx}]: {reason}");
-        let text = |k: &str| {
-            src.get(k)
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .unwrap_or_default()
-        };
-        let full = resolve_file_hash(state, text("file_hash")).map_err(|e| fail(e.fix))?;
-        let (loc, anchor) = (text("location"), text("anchor"));
-        let locators = index
-            .locators_for_hash(&full, 100_000)
-            .map_err(|e| fail(format!("index read failed: {e}")))?;
-        let chunk = |l: &str| index.chunk(&full, l).ok().flatten();
-        if let Some(page) = loc.strip_suffix(":transcript") {
-            let body = chunk(loc).ok_or_else(|| fail(format!("no transcript at '{loc}'")))?;
-            verify_text(anchor, &[&body]).map_err(|r| fail(r.to_string()))?;
-            let key = match page.strip_prefix("p:") {
-                Some(n) => format!("{full}/p:{n}"),
-                None => format!("{full}/img"),
-            };
-            let verified = state
-                .get(col::TRANSCRIPTS, &key)
-                .and_then(|t| t.get("verified"))
-                .and_then(Value::as_bool)
-                == Some(true);
-            transcript_only &= !verified;
-            continue;
-        }
-        transcript_only = false;
-        if let Some((sheet, cell)) = loc.strip_prefix("x:").and_then(|r| r.split_once('!'))
-            && !cell.contains(':')
-            && cell != "summary"
-        {
-            let prefix = format!("x:{sheet}!");
-            let bodies: Vec<String> = locators
-                .iter()
-                .filter(|l| l.starts_with(&prefix))
-                .filter_map(|l| chunk(l))
-                .collect();
-            let refs: Vec<&str> = bodies.iter().map(String::as_str).collect();
-            verify_cell(cell, anchor, &refs).map_err(|r| fail(r.to_string()))?;
-        } else if loc.starts_with("l:") || loc.starts_with("o:") {
-            verify_name(loc, &locators).map_err(|r| fail(r.to_string()))?;
-        } else {
-            let pos = locators
-                .iter()
-                .position(|l| l == loc)
-                .ok_or_else(|| fail(format!("location '{loc}' does not exist in that file")))?;
-            let near = &locators[pos.saturating_sub(1)..(pos + 2).min(locators.len())];
-            let bodies: Vec<String> = near.iter().filter_map(|l| chunk(l)).collect();
-            let refs: Vec<&str> = bodies.iter().map(String::as_str).collect();
-            verify_text(anchor, &refs).map_err(|r| fail(r.to_string()))?;
-        }
-    }
-    Ok(if transcript_only {
-        "unverified_transcript"
-    } else {
-        "verified"
-    })
-}
-
 /// Checks one host grade against the stored rubric: every criterion scored
 /// within its range and a consistent total. Returns `(item_id, total, max)`.
 fn check_grade(
@@ -882,7 +810,7 @@ pub fn execute(
                 let grounding = if mode == "extended" {
                     Ok("beyond_notes")
                 } else {
-                    ground_sources(&state, index.as_ref(), &sources)
+                    lucubra_ingest::ground::ground_sources(&state, index.as_ref(), &sources)
                 };
                 match grounding {
                     Ok(label) => {
