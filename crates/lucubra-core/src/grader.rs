@@ -300,6 +300,29 @@ fn parse_unit(s: &str) -> Option<Unit> {
     })
 }
 
+/// Target success rate of the exam simulation staircase (SPEC section 13.4).
+pub const TARGET_SUCCESS: f64 = 0.7;
+
+/// Next staircase difficulty step: up after a correct answer, down after a
+/// wrong one, within 1 to 5.
+pub fn staircase(step: u8, correct: bool) -> u8 {
+    if correct {
+        (step + 1).min(5)
+    } else {
+        step.saturating_sub(1).max(1)
+    }
+}
+
+/// Elo-style item difficulty update once the item has at least five
+/// attempts: a correct answer lowers it, a wrong one raises it, settling where
+/// learners succeed at the target rate.
+pub fn elo_difficulty(difficulty: f64, score: f64, attempts: u64) -> f64 {
+    if attempts < 5 {
+        return difficulty;
+    }
+    (difficulty + 0.5 * (TARGET_SUCCESS - score)).clamp(1.0, 5.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -375,5 +398,17 @@ mod tests {
             json!({"type": "numeric", "answer": "100 \u{00B0}C", "tolerance": {"abs": 0.01}});
         assert!(ok(&temp, json!("373.15 K")));
         assert!(ok(&temp, json!("212 \u{00B0}F")));
+    }
+
+    #[test]
+    fn staircase_moves_within_bounds_and_elo_waits_for_five() {
+        assert_eq!(staircase(3, true), 4);
+        assert_eq!(staircase(5, true), 5);
+        assert_eq!(staircase(3, false), 2);
+        assert_eq!(staircase(1, false), 1);
+        assert_eq!(elo_difficulty(3.0, 1.0, 4), 3.0);
+        assert!(elo_difficulty(3.0, 1.0, 5) < 3.0);
+        assert!(elo_difficulty(3.0, 0.0, 5) > 3.0);
+        assert_eq!(elo_difficulty(5.0, 0.0, 9), 5.0);
     }
 }
