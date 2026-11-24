@@ -1233,6 +1233,7 @@ dependencies = [
  "blake3",
  "lucubra-core",
  "lucubra-ingest",
+ "lucubra-pack",
  "rmcp",
  "schemars",
  "serde",
