@@ -383,7 +383,7 @@ impl State {
                     && event.kind == "item.answered"
                 {
                     let mut s = Map::new();
-                    for key in ["step", "answered", "correct_count"] {
+                    for key in ["step", "answered", "correct_count", "served"] {
                         if let Some(v) = data.get(&format!("sim_{key}")) {
                             s.insert(key.into(), v.clone());
                         }
