@@ -192,6 +192,7 @@ pub fn execute(
                     "locator": hit.locator,
                     "score": hit.score,
                     "material": material,
+                    "tutor_mode": crate::tools::tutor_mode(&state, &hit.hash),
                 })
             })
             .collect();
