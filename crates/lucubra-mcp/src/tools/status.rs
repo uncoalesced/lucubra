@@ -26,6 +26,33 @@ pub struct StatusArgs {
     pub progress: Option<Vec<ProgressEntry>>,
 }
 
+/// Exam readiness per subject: mean practice mastery of its units, from
+/// strict items only (S27). Subjects without practice are left out.
+fn readiness(state: &lucubra_core::state::State) -> Value {
+    let today = crate::tools::practice::today_day();
+    let mut units: std::collections::BTreeSet<String> = state
+        .collection(col::UNITS)
+        .map(|(k, _)| k.clone())
+        .collect();
+    units.extend(
+        state
+            .collection(col::ITEMS)
+            .filter_map(|(_, i)| i.get("unit").and_then(Value::as_str).map(str::to_owned)),
+    );
+    let mut by_subject: std::collections::BTreeMap<String, Vec<f64>> = Default::default();
+    for unit in units {
+        if let Some(m) = lucubra_core::planner::unit_mastery(state, &unit, today) {
+            let subject = unit.split('/').next().unwrap_or_default().to_owned();
+            by_subject.entry(subject).or_default().push(m);
+        }
+    }
+    by_subject
+        .into_iter()
+        .map(|(s, v)| (s, json!(v.iter().sum::<f64>() / v.len() as f64)))
+        .collect::<Map<String, Value>>()
+        .into()
+}
+
 pub fn execute(
     args: &Map<String, Value>,
     ctx: &ToolContext<'_>,
@@ -110,6 +137,8 @@ pub fn execute(
         Value::Null
     };
 
+    let questions = crate::tools::assessment_questions(ctx.ws, &state);
+    let next = (!questions.is_empty()).then(|| "confirm_assessment".to_owned());
     Ok(ToolOutcome {
         data: json!({
             "workspace_id": ws_status.workspace_id,
@@ -126,9 +155,10 @@ pub fn execute(
             "logged_minutes_total": logged_minutes_total,
             "host_renders_artifacts": ctx.host.profile.renders_artifacts,
             "sleep_retention": sleep_retention,
-            "readiness": Value::Null,
+            "readiness": readiness(&state),
+            "needs_user": questions,
         }),
-        next: None,
+        next,
         warnings: Vec::new(),
         per_call_limit: limits.response_limit,
         suppress_wrap_up: false,

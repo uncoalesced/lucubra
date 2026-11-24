@@ -360,6 +360,35 @@ fn file_tokens(file: &Value) -> u64 {
         .unwrap_or(400)
 }
 
+/// Unit mastery from practice: `0.6 * R + 0.4 * A`, where R is the mean
+/// recall probability of the unit's cards on `today` and A the mean last score
+/// of its strict items. Extended (`beyond_notes`) items never count. `None`
+/// without practice data.
+pub fn unit_mastery(state: &State, unit: &str, today: i64) -> Option<f64> {
+    let mean = |v: Vec<f64>| (!v.is_empty()).then(|| v.iter().sum::<f64>() / v.len() as f64);
+    let in_unit = |v: &Value| v.get("unit").and_then(Value::as_str) == Some(unit);
+    let r = mean(
+        state
+            .collection(col::CARDS)
+            .filter(|(_, c)| in_unit(c) && c.get("last_day").is_some())
+            .map(|(_, c)| crate::srs::retrievability(c, today))
+            .collect(),
+    );
+    let a = mean(
+        state
+            .collection(col::ITEMS)
+            .filter(|(_, i)| {
+                in_unit(i) && i.get("mode").and_then(Value::as_str) != Some("extended")
+            })
+            .filter_map(|(_, i)| i.get("last_score").and_then(Value::as_f64))
+            .collect(),
+    );
+    match (r, a) {
+        (Some(r), Some(a)) => Some(0.6 * r + 0.4 * a),
+        (r, a) => r.or(a),
+    }
+}
+
 /// Work items from replayed state: one per (subject, unit) with classified
 /// files or a unit card, tied to the subject's next exam on or after `today`.
 pub fn work_items(cfg: &PlannerConfig, state: &State, today: i64, domain: &str) -> Vec<WorkItem> {
@@ -388,7 +417,10 @@ pub fn work_items(cfg: &PlannerConfig, state: &State, today: i64, domain: &str) 
             let unit_data = state.get(col::UNITS, &format!("{subject}/{unit}"));
             let num = |k: &str| unit_data.and_then(|u| u.get(k)).and_then(Value::as_f64);
             let difficulty = num("difficulty").unwrap_or(1.0);
-            let mastery = num("mastery").unwrap_or(0.0).clamp(0.0, 1.0);
+            let mastery = unit_mastery(state, &format!("{subject}/{unit}"), today)
+                .or_else(|| num("mastery"))
+                .unwrap_or(0.0)
+                .clamp(0.0, 1.0);
             let exam = state
                 .collection(col::EXAMS)
                 .filter(|(_, e)| e.get("subject").and_then(Value::as_str) == Some(subject.as_str()))
@@ -426,6 +458,41 @@ mod tests {
             mastery: 0.0,
             difficulty: 0.5,
         }
+    }
+
+    #[test]
+    fn planner_mastery_from_practice() {
+        let mut state = State::default();
+        let ev = |kind: &str, data: Value| crate::event::Event {
+            v: 1,
+            id: "e".into(),
+            dev: "d".into(),
+            seq: 1,
+            hlc: "h".into(),
+            ts: String::new(),
+            kind: kind.into(),
+            data,
+        };
+        assert_eq!(unit_mastery(&state, "bio/u1", 10), None);
+        let strict = serde_json::json!({"item_id": "a", "unit": "bio/u1", "mode": "strict"});
+        let extended = serde_json::json!({"item_id": "b", "unit": "bio/u1", "mode": "extended"});
+        state.apply(&ev("item.created", strict)).unwrap();
+        state.apply(&ev("item.created", extended)).unwrap();
+        let graded = |id: &str, score: f64| serde_json::json!({"item_id": id, "score": score});
+        state.apply(&ev("item.answered", graded("a", 0.5))).unwrap();
+        state.apply(&ev("item.answered", graded("b", 1.0))).unwrap();
+        assert_eq!(unit_mastery(&state, "bio/u1", 10), Some(0.5));
+        let card =
+            crate::srs::review(&serde_json::json!({}), 10, crate::srs::Rating::Good, None).unwrap();
+        let r = crate::srs::retrievability(&card, 12);
+        let mut data = card.as_object().unwrap().clone();
+        data.insert("card_id".into(), "c".into());
+        data.insert("unit".into(), "bio/u1".into());
+        state
+            .apply(&ev("card.reviewed", Value::Object(data)))
+            .unwrap();
+        let m = unit_mastery(&state, "bio/u1", 12).unwrap();
+        assert!((m - (0.6 * r + 0.4 * 0.5)).abs() < 1e-9);
     }
 
     #[test]

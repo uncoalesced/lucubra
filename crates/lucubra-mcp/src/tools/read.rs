@@ -374,6 +374,7 @@ pub fn execute(
                     "file_hash": full_hash,
                     "locator": locator,
                     "material": material,
+                    "tutor_mode": crate::tools::tutor_mode(&state, &full_hash),
                     "truncated": truncated,
                     "next_offset": next_offset,
                 }),
@@ -436,6 +437,11 @@ pub fn execute(
                     "path": rel,
                     "verified": verified.unwrap_or(false),
                     "material": material,
+                    "tutor_mode": state
+                        .get(col::PATHS, &rel)
+                        .and_then(|p| p.get("hash"))
+                        .and_then(Value::as_str)
+                        .and_then(|h| crate::tools::tutor_mode(&state, h)),
                     "truncated": truncated,
                     "next_offset": next_offset,
                 }),

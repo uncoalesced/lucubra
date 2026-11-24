@@ -354,6 +354,10 @@ pub fn execute(
             let mut summary = collect_status_details(ctx.ws, &pre_state, batch_size, cursor);
             let batch = classify_pending(ctx.ws, false).map_err(ws_error)?.batch;
             summary["classification_batch"] = classification_batch(&batch);
+            let questions = crate::tools::assessment_questions(ctx.ws, &pre_state);
+            if !questions.is_empty() {
+                summary["needs_user"] = json!(questions);
+            }
             Ok(ToolOutcome {
                 data: summary,
                 next: None,

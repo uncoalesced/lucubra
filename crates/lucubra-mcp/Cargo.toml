@@ -13,6 +13,7 @@ http-transport = ["rmcp/transport-streamable-http-server"]
 
 [dependencies]
 ureq.workspace = true
+blake3.workspace = true
 lucubra-core.workspace = true
 lucubra-ingest.workspace = true
 rmcp.workspace = true
@@ -25,6 +26,7 @@ tracing.workspace = true
 ulid.workspace = true
 
 [dev-dependencies]
+zip.workspace = true
 tempfile.workspace = true
 
 [lints]

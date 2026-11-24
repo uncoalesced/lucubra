@@ -41,6 +41,15 @@ pub mod col {
     pub const MOVES: &str = "moves";
     /// Study plans by plan id: start date, blocks, triage, capacity, status.
     pub const PLANS: &str = "plans";
+    /// Practice items by item id: unit, type, prompt, answer, sources, mode,
+    /// grounding, difficulty, attempts and the last score.
+    pub const ITEMS: &str = "items";
+    /// Grounding rejections by item key: count and last reason.
+    pub const REJECTIONS: &str = "rejections";
+    /// FSRS cards by card id: unit, item, memory state and due day.
+    pub const CARDS: &str = "cards";
+    /// Exam simulations by sim id: staircase step, counts and status.
+    pub const EXAM_SIMS: &str = "exam_sims";
 }
 
 /// Event types the engine folds into state. Other known types are stored in
@@ -72,6 +81,14 @@ pub const FOLDED_TYPES: &[&str] = &[
     "step.completed",
     "session.ended",
     "handoff.written",
+    "file.tagged",
+    "item.created",
+    "item.rejected",
+    "item.answered",
+    "item.graded",
+    "card.reviewed",
+    "exam_sim.started",
+    "exam_sim.completed",
 ];
 
 /// Why an event did not change state.
@@ -312,6 +329,89 @@ impl State {
                 }
                 self.merge(col::PLANS, id, &entry);
             }
+            "file.tagged" => {
+                let hash = str_field(data, "hash").ok_or(Skip::BadPayload("hash"))?;
+                let on = data
+                    .get("assessment")
+                    .and_then(Value::as_bool)
+                    .ok_or(Skip::BadPayload("assessment"))?;
+                let mut file = Map::new();
+                file.insert("assessment".into(), Value::Bool(on));
+                file.insert("assessment_confirmed".into(), Value::Bool(true));
+                self.merge(col::FILES, hash, &file);
+            }
+            "item.created" => {
+                let id = str_field(data, "item_id").ok_or(Skip::BadPayload("item_id"))?;
+                let mut item = fields.clone();
+                item.insert("attempts".into(), Value::from(0u64));
+                self.merge(col::ITEMS, id, &item);
+            }
+            "item.rejected" => {
+                let key = str_field(data, "item_key").ok_or(Skip::BadPayload("item_key"))?;
+                let count = self
+                    .get(col::REJECTIONS, key)
+                    .and_then(|r| r.get("count"))
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
+                let mut entry = fields.clone();
+                entry.insert("count".into(), Value::from(count + 1));
+                self.merge(col::REJECTIONS, key, &entry);
+            }
+            "item.answered" | "item.graded" => {
+                let id = str_field(data, "item_id").ok_or(Skip::BadPayload("item_id"))?;
+                let mut entry = Map::new();
+                if event.kind == "item.answered" {
+                    let attempts = self
+                        .get(col::ITEMS, id)
+                        .and_then(|i| i.get("attempts"))
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0);
+                    entry.insert("attempts".into(), Value::from(attempts + 1));
+                }
+                for (key, name) in [
+                    ("score", "last_score"),
+                    ("correct", "last_correct"),
+                    ("graded_by", "last_graded_by"),
+                    ("difficulty", "difficulty"),
+                ] {
+                    if let Some(v) = data.get(key) {
+                        entry.insert(name.into(), v.clone());
+                    }
+                }
+                self.merge(col::ITEMS, id, &entry);
+                if let Some(sim) = str_field(data, "sim_id")
+                    && event.kind == "item.answered"
+                {
+                    let mut s = Map::new();
+                    for key in ["step", "answered", "correct_count", "served"] {
+                        if let Some(v) = data.get(format!("sim_{key}")) {
+                            s.insert(key.into(), v.clone());
+                        }
+                    }
+                    self.merge(col::EXAM_SIMS, sim, &s);
+                }
+            }
+            "card.reviewed" => {
+                let id = str_field(data, "card_id").ok_or(Skip::BadPayload("card_id"))?;
+                let mut card = fields.clone();
+                card.remove("card_id");
+                self.merge(col::CARDS, id, &card);
+            }
+            "exam_sim.started" | "exam_sim.completed" => {
+                let id = str_field(data, "sim_id").ok_or(Skip::BadPayload("sim_id"))?;
+                let mut sim = fields.clone();
+                sim.remove("sim_id");
+                let status = if event.kind == "exam_sim.started" {
+                    "active"
+                } else {
+                    "completed"
+                };
+                sim.insert("status".into(), Value::String(status.into()));
+                if !event.ts.is_empty() {
+                    sim.insert(format!("{status}_ts"), Value::String(event.ts.clone()));
+                }
+                self.merge(col::EXAM_SIMS, id, &sim);
+            }
             "transcript.saved" => {
                 let hash = str_field(data, "hash").ok_or(Skip::BadPayload("hash"))?;
                 let key = transcript_key(hash, data);
@@ -485,7 +585,7 @@ mod tests {
         newer.v = 2;
         assert_eq!(s.apply(&newer), Err(Skip::NewerVersion));
         assert_eq!(s, State::default());
-        assert!(s.apply(&event("item.answered", json!({}))).is_ok());
+        assert!(s.apply(&event("concept.linked", json!({}))).is_ok());
         assert_eq!(s, State::default());
     }
 
@@ -632,5 +732,53 @@ mod tests {
         assert_eq!(sess["logged_minutes"], 25);
         assert_eq!(sess["steps_count"], 1);
         assert_eq!(sess["summary"], "Reviewed variance.");
+    }
+
+    #[test]
+    fn folds_practice_events() {
+        let mut s = State::default();
+        let item = json!({"item_id": "i1", "unit": "bio/u1", "type": "cloze", "mode": "strict"});
+        s.apply(&event("item.created", item)).unwrap();
+        let answered = json!({"item_id": "i1", "score": 0.5, "correct": false,
+            "sim_id": "x1", "sim_step": 2, "sim_answered": 1, "sim_correct_count": 0});
+        s.apply(&event("item.answered", answered)).unwrap();
+        let i1 = s.get(col::ITEMS, "i1").unwrap();
+        assert_eq!(i1["attempts"], 1);
+        assert_eq!(i1["last_score"], 0.5);
+        assert_eq!(s.get(col::EXAM_SIMS, "x1").unwrap()["step"], 2);
+        s.apply(&event(
+            "item.graded",
+            json!({"item_id": "i1", "score": 1.0, "graded_by": "host"}),
+        ))
+        .unwrap();
+        assert_eq!(s.get(col::ITEMS, "i1").unwrap()["attempts"], 1);
+        assert_eq!(s.get(col::ITEMS, "i1").unwrap()["last_graded_by"], "host");
+
+        for _ in 0..2 {
+            s.apply(&event(
+                "item.rejected",
+                json!({"item_key": "k", "reason": "r"}),
+            ))
+            .unwrap();
+        }
+        assert_eq!(s.get(col::REJECTIONS, "k").unwrap()["count"], 2);
+
+        s.apply(&event(
+            "card.reviewed",
+            json!({"card_id": "c1", "due_day": 9}),
+        ))
+        .unwrap();
+        assert_eq!(s.get(col::CARDS, "c1").unwrap()["due_day"], 9);
+
+        s.apply(&event(
+            "file.tagged",
+            json!({"hash": "h", "assessment": true}),
+        ))
+        .unwrap();
+        assert_eq!(s.get(col::FILES, "h").unwrap()["assessment"], true);
+        assert_eq!(
+            s.apply(&event("file.tagged", json!({"hash": "h"}))),
+            Err(Skip::BadPayload("assessment"))
+        );
     }
 }

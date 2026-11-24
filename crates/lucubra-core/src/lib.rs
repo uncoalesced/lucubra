@@ -3,11 +3,14 @@
 
 //! Domain model, event log, replay, planner and storage for Lucubra.
 
+pub mod anki;
 pub mod appdata;
 pub mod cache;
 pub mod calendar;
 pub mod error;
 pub mod event;
+pub mod grader;
+pub mod grounding;
 pub mod hlc;
 pub mod log;
 pub mod organise;
@@ -15,6 +18,7 @@ pub mod paths;
 pub mod planner;
 pub mod projection;
 pub mod replay;
+pub mod srs;
 pub mod state;
 pub mod workspace;
 

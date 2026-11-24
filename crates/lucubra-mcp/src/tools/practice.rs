@@ -1,15 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 // Engineered by uncoalesced
 
-//! `lucubra_practice`: FSRS practice and exam simulation validation (engine in M6).
+//! `lucubra_practice`: FSRS practice queue, engine grading of closed-format
+//! answers, and adaptive exam simulation (SPEC sections 13 and 14).
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use lucubra_core::grader::{Graded, elo_difficulty, grade, staircase};
+use lucubra_core::planner::days_from_iso;
+use lucubra_core::srs::{self, Rating};
+use lucubra_core::state::{State, col};
 use serde::Deserialize;
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::budget::BudgetLimits;
 use crate::envelope::{ProgressEntry, ToolError, ToolErrorCode};
 use crate::tools::{
-    ToolContext, ToolOutcome, check_keys, check_slug, opt_str, opt_u64, req_str, require_action,
+    ToolContext, ToolOutcome, check_keys, check_slug, hash_to_path_map, opt_str, opt_u64, req_str,
+    require_action,
 };
 
 /// JSON Schema arguments for `lucubra_practice`.
@@ -24,142 +32,595 @@ pub struct PracticeArgs {
     /// Optional unit slug filter.
     #[serde(default)]
     pub unit: Option<String>,
-    /// Practice mode: strict (default) or extended.
+    /// Practice mode: strict (default, your notes only) or extended (adds beyond-notes items).
     #[serde(default)]
     pub mode: Option<String>,
     /// Maximum items in queue (1-20).
     #[serde(default)]
     pub limit: Option<u64>,
-    /// Practice item identifier (for answer).
+    /// Practice item identifier (for answer and exam_sim answers).
     #[serde(default)]
     pub item_id: Option<String>,
-    /// User response payload (for answer).
+    /// User response payload (for answer and exam_sim answers).
     #[serde(default)]
     pub response: Option<Value>,
     /// Optional FSRS self-rating: again, hard, good, easy.
     #[serde(default)]
     pub rating: Option<String>,
-    /// Exam id (for exam_sim).
+    /// Exam id (to start exam_sim).
     #[serde(default)]
     pub exam_id: Option<String>,
+    /// Running simulation id (to answer inside exam_sim).
+    #[serde(default)]
+    pub sim_id: Option<String>,
     /// Timed duration in minutes (5-300, for exam_sim).
     #[serde(default)]
     pub duration_minutes: Option<u64>,
     /// Number of items in exam_sim (1-100).
     #[serde(default)]
     pub count: Option<u64>,
+    /// Day to practise as, YYYY-MM-DD (defaults to today, UTC).
+    #[serde(default)]
+    pub today: Option<String>,
     /// Optional completed-step checkpoints to log alongside this call.
     #[serde(default)]
     pub progress: Option<Vec<ProgressEntry>>,
 }
 
+fn invalid(msg: impl Into<String>) -> ToolError {
+    ToolError::new(ToolErrorCode::InvalidArguments, msg)
+}
+
+fn not_found(msg: impl Into<String>) -> ToolError {
+    ToolError::new(ToolErrorCode::NotFound, msg)
+}
+
+fn ws_err(e: lucubra_core::Error) -> ToolError {
+    ToolError::new(
+        ToolErrorCode::WorkspaceError,
+        format!("practice update failed: {e}"),
+    )
+}
+
+fn now_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as i64)
+}
+
+/// Today as days since the epoch (UTC).
+pub fn today_day() -> i64 {
+    now_ms() / 86_400_000
+}
+
+fn day_arg(args: &Map<String, Value>) -> std::result::Result<i64, ToolError> {
+    match opt_str(args, "today")? {
+        Some(s) => days_from_iso(s).ok_or_else(|| invalid("today must be a date like 2026-11-24")),
+        None => Ok(today_day()),
+    }
+}
+
+fn mode_arg(args: &Map<String, Value>) -> std::result::Result<&str, ToolError> {
+    match opt_str(args, "mode")?.unwrap_or("strict") {
+        m @ ("strict" | "extended") => Ok(m),
+        _ => Err(invalid("mode must be 'strict' or 'extended'")),
+    }
+}
+
+fn text<'a>(v: &'a Value, k: &str) -> Option<&'a str> {
+    v.get(k).and_then(Value::as_str)
+}
+
+fn num(v: &Value, k: &str) -> u64 {
+    v.get(k).and_then(Value::as_u64).unwrap_or(0)
+}
+
+/// The next exam day for the item's subject on or after `today`.
+fn exam_day_for(state: &State, unit: &str, today: i64) -> Option<i64> {
+    let subject = unit.split('/').next()?;
+    state
+        .collection(col::EXAMS)
+        .filter(|(_, e)| text(e, "subject") == Some(subject))
+        .filter_map(|(_, e)| days_from_iso(text(e, "date")?))
+        .filter(|d| *d >= today)
+        .min()
+}
+
+/// Reviews the FSRS card for an item, creating it after a wrong answer or an
+/// explicit rating; cards come from items the user got wrong (SPEC 14).
+pub fn review_card(
+    ctx: &ToolContext<'_>,
+    state: &State,
+    item_id: &str,
+    correct: bool,
+    score: f64,
+    rating: Option<Rating>,
+    today: i64,
+) -> std::result::Result<Option<Value>, ToolError> {
+    let card_id = format!("c_{item_id}");
+    let existing = state.get(col::CARDS, &card_id);
+    if existing.is_none() && correct && rating.is_none() {
+        return Ok(None);
+    }
+    let unit = state
+        .get(col::ITEMS, item_id)
+        .and_then(|i| text(i, "unit"))
+        .unwrap_or_default();
+    let rating = rating.unwrap_or_else(|| Rating::from_score(correct, score));
+    let mut fields = srs::review(
+        existing.unwrap_or(&json!({})),
+        today,
+        rating,
+        exam_day_for(state, unit, today),
+    )
+    .map_err(|e| ToolError::new(ToolErrorCode::WorkspaceError, e))?;
+    fields["card_id"] = json!(card_id);
+    fields["item_id"] = json!(item_id);
+    fields["unit"] = json!(unit);
+    ctx.ws
+        .append("card.reviewed", fields.clone())
+        .map_err(ws_err)?;
+    Ok(Some(fields))
+}
+
+fn in_scope(item: &Value, subject: Option<&str>, unit: Option<&str>, mode: &str) -> bool {
+    let key = text(item, "unit").unwrap_or_default();
+    let (s, u) = key.split_once('/').unwrap_or((key, ""));
+    subject.is_none_or(|x| x == s)
+        && unit.is_none_or(|x| x == u)
+        && (mode == "extended" || text(item, "mode") != Some("extended"))
+}
+
+/// What the learner sees: never the answer.
+fn item_view(state: &State, id: &str, item: &Value, reason: &str) -> Value {
+    let paths = hash_to_path_map(state);
+    let grounding = text(item, "grounding").unwrap_or("verified");
+    let label = match grounding {
+        "unverified_transcript" => Some("from an unverified transcript"),
+        "beyond_notes" => Some("beyond your notes"),
+        _ => None,
+    };
+    let sources: Vec<Value> = item
+        .get("sources")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|s| {
+            let hash = text(s, "file_hash").unwrap_or_default();
+            json!({"path": paths.get(hash), "location": text(s, "location")})
+        })
+        .collect();
+    let mut view = json!({
+        "item_id": id,
+        "unit": text(item, "unit"),
+        "type": text(item, "type"),
+        "prompt": text(item, "prompt"),
+        "grounding": grounding,
+        "label": label,
+        "difficulty": item.get("difficulty"),
+        "sources": sources,
+        "reason": reason,
+    });
+    for k in ["options", "rubric"] {
+        if let Some(v) = item.get(k) {
+            view[k] = v.clone();
+        }
+    }
+    view
+}
+
+fn outcome(data: Value, next: &str, limits: BudgetLimits) -> ToolOutcome {
+    ToolOutcome {
+        data,
+        next: Some(next.to_owned()),
+        warnings: Vec::new(),
+        per_call_limit: limits.response_limit,
+        suppress_wrap_up: false,
+        active_session_override: None,
+    }
+}
+
 pub fn execute(
     args: &Map<String, Value>,
-    _ctx: &ToolContext<'_>,
-    _limits: BudgetLimits,
+    ctx: &ToolContext<'_>,
+    limits: BudgetLimits,
 ) -> std::result::Result<ToolOutcome, ToolError> {
     let action = require_action(args, &["next", "answer", "exam_sim"])?;
+    let state = ctx.ws.replay().map_err(ws_err)?.state;
     match action {
-        "next" => {
-            check_keys(
-                args,
-                &["action", "subject", "unit", "mode", "limit", "progress"],
-                "lucubra_practice(next)",
-            )?;
-            if let Some(s) = opt_str(args, "subject")? {
-                check_slug("subject", s)?;
-            }
-            if let Some(u) = opt_str(args, "unit")? {
-                check_slug("unit", u)?;
-            }
-            if let Some(m) = opt_str(args, "mode")?
-                && !matches!(m, "strict" | "extended")
-            {
-                return Err(ToolError::new(
-                    ToolErrorCode::InvalidArguments,
-                    "mode must be 'strict' or 'extended'",
-                ));
-            }
-            let _limit = opt_u64(
-                args,
-                "limit",
-                1,
-                20,
-                "limit must be an integer between 1 and 20",
-            )?;
-        }
-        "answer" => {
-            check_keys(
-                args,
-                &["action", "item_id", "response", "rating", "progress"],
-                "lucubra_practice(answer)",
-            )?;
-            let _item_id = req_str(
-                args,
-                "item_id",
-                "provide both 'item_id' and 'response' for action 'answer'",
-            )?;
-            if args.get("response").is_none_or(Value::is_null) {
-                return Err(ToolError::new(
-                    ToolErrorCode::InvalidArguments,
-                    "provide both 'item_id' and 'response' for action 'answer'",
-                ));
-            }
-            if let Some(r) = opt_str(args, "rating")?
-                && !matches!(r, "again" | "hard" | "good" | "easy")
-            {
-                return Err(ToolError::new(
-                    ToolErrorCode::InvalidArguments,
-                    "rating must be one of: again, hard, good, easy",
-                ));
-            }
-        }
-        "exam_sim" => {
-            check_keys(
-                args,
-                &[
-                    "action",
-                    "subject",
-                    "exam_id",
-                    "mode",
-                    "duration_minutes",
-                    "count",
-                    "progress",
-                ],
-                "lucubra_practice(exam_sim)",
-            )?;
-            if let Some(s) = opt_str(args, "subject")? {
-                check_slug("subject", s)?;
-            }
-            let _eid = opt_str(args, "exam_id")?;
-            if let Some(m) = opt_str(args, "mode")?
-                && !matches!(m, "strict" | "extended")
-            {
-                return Err(ToolError::new(
-                    ToolErrorCode::InvalidArguments,
-                    "mode must be 'strict' or 'extended'",
-                ));
-            }
-            let _dur = opt_u64(
-                args,
-                "duration_minutes",
-                5,
-                300,
-                "duration_minutes must be an integer between 5 and 300",
-            )?;
-            let _cnt = opt_u64(
-                args,
-                "count",
-                1,
-                100,
-                "count must be an integer between 1 and 100",
-            )?;
-        }
+        "next" => next(args, &state, limits),
+        "answer" => answer(args, ctx, &state, limits),
+        "exam_sim" => exam_sim(args, ctx, &state, limits),
         _ => unreachable!(),
     }
+}
 
-    Err(ToolError::new(
-        ToolErrorCode::NotImplemented,
-        "Practice and spaced repetition (FSRS) are implemented in milestone M6.",
+fn next(
+    args: &Map<String, Value>,
+    state: &State,
+    limits: BudgetLimits,
+) -> std::result::Result<ToolOutcome, ToolError> {
+    check_keys(
+        args,
+        &[
+            "action", "subject", "unit", "mode", "limit", "today", "progress",
+        ],
+        "lucubra_practice(next)",
+    )?;
+    let subject = opt_str(args, "subject")?;
+    let unit = opt_str(args, "unit")?;
+    for (field, v) in [("subject", subject), ("unit", unit)] {
+        if let Some(v) = v {
+            check_slug(field, v)?;
+        }
+    }
+    let mode = mode_arg(args)?;
+    let limit = opt_u64(
+        args,
+        "limit",
+        1,
+        20,
+        "limit must be an integer between 1 and 20",
+    )?
+    .unwrap_or(5) as usize;
+    let today = day_arg(args)?;
+    let mut due: Vec<(i64, String)> = state
+        .collection(col::CARDS)
+        .filter_map(|(_, c)| {
+            let day = c.get("due_day").and_then(Value::as_i64)?;
+            let id = text(c, "item_id")?;
+            let item = state.get(col::ITEMS, id)?;
+            (day <= today && in_scope(item, subject, unit, mode)).then(|| (day, id.to_owned()))
+        })
+        .collect();
+    due.sort();
+    let fresh: Vec<(&String, &Value)> = state
+        .collection(col::ITEMS)
+        .filter(|(id, i)| {
+            !due.iter().any(|(_, d)| d == *id)
+                && num(i, "attempts") == 0
+                && in_scope(i, subject, unit, mode)
+        })
+        .collect();
+    let queue: Vec<Value> = due
+        .iter()
+        .filter_map(|(_, id)| Some(item_view(state, id, state.get(col::ITEMS, id)?, "due")))
+        .chain(fresh.iter().map(|(id, i)| item_view(state, id, i, "new")))
+        .take(limit)
+        .collect();
+    let mut data = json!({
+        "mode": mode,
+        "due_count": due.len(),
+        "new_count": fresh.len(),
+        "queue": queue,
+    });
+    if queue.is_empty() {
+        data["message"] = json!(
+            "Nothing to practise yet. Read a unit with lucubra_read, write items that quote it, and store them with lucubra_submit(action=\"items\")."
+        );
+        return Ok(outcome(data, "submit_items", limits));
+    }
+    Ok(outcome(data, "answer", limits))
+}
+
+fn response_arg<'a>(
+    args: &'a Map<String, Value>,
+    fix: &str,
+) -> std::result::Result<&'a Value, ToolError> {
+    args.get("response")
+        .filter(|v| !v.is_null())
+        .ok_or_else(|| invalid(fix))
+}
+
+fn answer(
+    args: &Map<String, Value>,
+    ctx: &ToolContext<'_>,
+    state: &State,
+    limits: BudgetLimits,
+) -> std::result::Result<ToolOutcome, ToolError> {
+    check_keys(
+        args,
+        &[
+            "action", "item_id", "response", "rating", "today", "progress",
+        ],
+        "lucubra_practice(answer)",
+    )?;
+    let fix = "provide both 'item_id' and 'response' for action 'answer'";
+    let item_id = req_str(args, "item_id", fix)?;
+    let response = response_arg(args, fix)?;
+    let rating = match opt_str(args, "rating")? {
+        Some(r) => Some(
+            Rating::parse(r)
+                .ok_or_else(|| invalid("rating must be one of: again, hard, good, easy"))?,
+        ),
+        None => None,
+    };
+    let today = day_arg(args)?;
+    let item = state.get(col::ITEMS, item_id).ok_or_else(|| {
+        not_found(format!(
+            "no practice item '{item_id}'; call lucubra_practice(action=\"next\")"
+        ))
+    })?;
+    let Graded::Engine {
+        correct,
+        score,
+        detail,
+    } = grade(item, response)
+    else {
+        ctx.ws
+            .append(
+                "item.answered",
+                json!({"item_id": item_id, "response": response, "graded_by": "pending"}),
+            )
+            .map_err(ws_err)?;
+        return Ok(outcome(
+            json!({
+                "item_id": item_id,
+                "graded_by": "host",
+                "rubric": item.get("rubric"),
+                "model_answer": item.get("answer"),
+                "message": "Grade this answer against each rubric criterion, then call lucubra_submit(action=\"grades\").",
+            }),
+            "submit_grades",
+            limits,
+        ));
+    };
+    let difficulty = item
+        .get("difficulty")
+        .and_then(Value::as_f64)
+        .unwrap_or(3.0);
+    ctx.ws
+        .append(
+            "item.answered",
+            json!({"item_id": item_id, "response": response, "correct": correct,
+                   "score": score, "graded_by": "engine",
+                   "difficulty": elo_difficulty(difficulty, score, num(item, "attempts") + 1)}),
+        )
+        .map_err(ws_err)?;
+    let card = review_card(ctx, state, item_id, correct, score, rating, today)?;
+    Ok(outcome(
+        json!({
+            "item_id": item_id,
+            "correct": correct,
+            "score": score,
+            "graded_by": "engine",
+            "check": detail,
+            "answer": item.get("answer"),
+            "card_due_day": card.as_ref().and_then(|c| c.get("due_day")),
+        }),
+        "next",
+        limits,
     ))
+}
+
+const CLOSED: &[&str] = &[
+    "mcq_single",
+    "mcq_multi",
+    "cloze",
+    "true_false",
+    "matching",
+    "numeric",
+    "ordering",
+    "formula_recall",
+];
+
+/// Closed-format items of `subject` for a simulation, not yet served.
+///
+/// shortcut: the blueprint draws on every closed-format item of the subject;
+/// weight by the past-paper type mix once past papers are tagged.
+fn pool<'a>(
+    state: &'a State,
+    subject: &str,
+    mode: &str,
+    served: &[String],
+) -> Vec<(&'a String, &'a Value)> {
+    state
+        .collection(col::ITEMS)
+        .filter(|(id, i)| {
+            !served.contains(id)
+                && in_scope(i, Some(subject), None, mode)
+                && text(i, "type").is_some_and(|t| CLOSED.contains(&t))
+        })
+        .collect()
+}
+
+/// The item whose difficulty is nearest the staircase step.
+fn nearest<'a>(items: &[(&'a String, &'a Value)], step: u8) -> Option<(&'a String, &'a Value)> {
+    let gap = |v: &Value| {
+        (v.get("difficulty").and_then(Value::as_f64).unwrap_or(3.0) - f64::from(step)).abs()
+    };
+    items
+        .iter()
+        .copied()
+        .min_by(|(a, x), (b, y)| gap(x).total_cmp(&gap(y)).then_with(|| a.cmp(b)))
+}
+
+fn exam_sim(
+    args: &Map<String, Value>,
+    ctx: &ToolContext<'_>,
+    state: &State,
+    limits: BudgetLimits,
+) -> std::result::Result<ToolOutcome, ToolError> {
+    check_keys(
+        args,
+        &[
+            "action",
+            "subject",
+            "exam_id",
+            "mode",
+            "duration_minutes",
+            "count",
+            "sim_id",
+            "item_id",
+            "response",
+            "today",
+            "progress",
+        ],
+        "lucubra_practice(exam_sim)",
+    )?;
+    let mode = mode_arg(args)?;
+    let today = day_arg(args)?;
+    match opt_str(args, "sim_id")? {
+        None => start_sim(args, ctx, state, mode, limits),
+        Some(sim_id) => answer_sim(args, ctx, state, sim_id, today, limits),
+    }
+}
+
+fn start_sim(
+    args: &Map<String, Value>,
+    ctx: &ToolContext<'_>,
+    state: &State,
+    mode: &str,
+    limits: BudgetLimits,
+) -> std::result::Result<ToolOutcome, ToolError> {
+    let exam_id = opt_str(args, "exam_id")?;
+    let exam = match exam_id {
+        Some(id) => Some(
+            state
+                .get(col::EXAMS, id)
+                .ok_or_else(|| not_found(format!("no exam '{id}'")))?,
+        ),
+        None => None,
+    };
+    let subject = opt_str(args, "subject")?
+        .or_else(|| exam.and_then(|e| text(e, "subject")))
+        .ok_or_else(|| invalid("provide 'subject' or 'exam_id' to start an exam simulation"))?;
+    check_slug("subject", subject)?;
+    let duration = opt_u64(
+        args,
+        "duration_minutes",
+        5,
+        300,
+        "duration_minutes must be an integer between 5 and 300",
+    )?
+    .unwrap_or(30);
+    let wanted = opt_u64(
+        args,
+        "count",
+        1,
+        100,
+        "count must be an integer between 1 and 100",
+    )?
+    .unwrap_or(10);
+    let items = pool(state, subject, mode, &[]);
+    let (first_id, first) = nearest(&items, 3).ok_or_else(|| {
+        not_found(format!(
+            "no closed-format practice items for '{subject}' yet; store some with lucubra_submit(action=\"items\")"
+        ))
+    })?;
+    let count = wanted.min(items.len() as u64);
+    let sim_id = format!("sim_{}", ulid::Ulid::new().to_string().to_lowercase());
+    ctx.ws
+        .append(
+            "exam_sim.started",
+            json!({"sim_id": sim_id, "subject": subject, "exam_id": exam_id, "mode": mode,
+                   "count": count, "duration_minutes": duration,
+                   "deadline_ms": now_ms() + duration as i64 * 60_000,
+                   "step": 3, "answered": 0, "correct_count": 0, "served": [first_id]}),
+        )
+        .map_err(ws_err)?;
+    Ok(outcome(
+        json!({
+            "sim_id": sim_id,
+            "count": count,
+            "duration_minutes": duration,
+            "rules": "Timed, no hints. Answer each item with lucubra_practice(action=\"exam_sim\", sim_id, item_id, response).",
+            "item": item_view(state, first_id, first, "exam_sim"),
+            "position": 1,
+        }),
+        "exam_sim",
+        limits,
+    ))
+}
+
+fn answer_sim(
+    args: &Map<String, Value>,
+    ctx: &ToolContext<'_>,
+    state: &State,
+    sim_id: &str,
+    today: i64,
+    limits: BudgetLimits,
+) -> std::result::Result<ToolOutcome, ToolError> {
+    let sim = state
+        .get(col::EXAM_SIMS, sim_id)
+        .ok_or_else(|| not_found(format!("no exam simulation '{sim_id}'")))?;
+    if text(sim, "status") != Some("active") {
+        return Err(invalid(format!(
+            "exam simulation '{sim_id}' has already finished"
+        )));
+    }
+    let fix = "provide 'item_id' and 'response' to answer inside the simulation";
+    let item_id = req_str(args, "item_id", fix)?;
+    let response = response_arg(args, fix)?;
+    let served: Vec<String> = sim
+        .get("served")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v.as_str().map(str::to_owned))
+        .collect();
+    let current = served.last().map_or("", String::as_str);
+    if current != item_id {
+        return Err(invalid(format!(
+            "answer the current item '{current}' first"
+        )));
+    }
+    let item = state
+        .get(col::ITEMS, item_id)
+        .ok_or_else(|| not_found(format!("no practice item '{item_id}'")))?;
+    let (correct, score) = match grade(item, response) {
+        Graded::Engine { correct, score, .. } => (correct, score),
+        Graded::Host => (false, 0.0),
+    };
+    let step = staircase(num(sim, "step").clamp(1, 5) as u8, correct);
+    let answered = num(sim, "answered") + 1;
+    let correct_count = num(sim, "correct_count") + u64::from(correct);
+    let timed_out = sim
+        .get("deadline_ms")
+        .and_then(Value::as_i64)
+        .is_some_and(|d| now_ms() > d);
+    let upcoming = if answered >= num(sim, "count") || timed_out {
+        None
+    } else {
+        let subject = text(sim, "subject").unwrap_or_default();
+        let sim_mode = text(sim, "mode").unwrap_or("strict");
+        nearest(&pool(state, subject, sim_mode, &served), step)
+    };
+    let mut served_after = served.clone();
+    if let Some((id, _)) = upcoming {
+        served_after.push(id.clone());
+    }
+    let difficulty = item
+        .get("difficulty")
+        .and_then(Value::as_f64)
+        .unwrap_or(3.0);
+    ctx.ws
+        .append(
+            "item.answered",
+            json!({"item_id": item_id, "response": response, "correct": correct, "score": score,
+                   "graded_by": "engine",
+                   "difficulty": elo_difficulty(difficulty, score, num(item, "attempts") + 1),
+                   "sim_id": sim_id, "sim_step": step, "sim_answered": answered,
+                   "sim_correct_count": correct_count, "sim_served": served_after}),
+        )
+        .map_err(ws_err)?;
+    review_card(ctx, state, item_id, correct, score, None, today)?;
+    if let Some((id, it)) = upcoming {
+        return Ok(outcome(
+            json!({"sim_id": sim_id, "item": item_view(state, id, it, "exam_sim"),
+                   "position": answered + 1, "count": num(sim, "count")}),
+            "exam_sim",
+            limits,
+        ));
+    }
+    let result = correct_count as f64 / answered.max(1) as f64;
+    let summary = json!({"sim_id": sim_id, "answered": answered,
+                         "correct_count": correct_count, "score": result,
+                         "final_step": step, "timed_out": timed_out});
+    ctx.ws
+        .append("exam_sim.completed", summary.clone())
+        .map_err(ws_err)?;
+    let mut data = summary;
+    data["completed"] = json!(true);
+    Ok(outcome(data, "review_results", limits))
 }

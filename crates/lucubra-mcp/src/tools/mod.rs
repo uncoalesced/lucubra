@@ -137,7 +137,7 @@ pub fn build_tools() -> Vec<Tool> {
         ),
         tool_def::<submit::SubmitArgs>(
             "lucubra_submit",
-            "Submit generated study artifacts: unit_summary, transcript, session_summary, classification, items, or grades.",
+            "Submit generated study artifacts: unit_summary, transcript, session_summary, classification, items (grounded by quoted anchors), grades (rubric scores), or tag (assessment on or off).",
             false,
             false,
         ),
@@ -155,7 +155,7 @@ pub fn build_tools() -> Vec<Tool> {
         ),
         tool_def::<practice::PracticeArgs>(
             "lucubra_practice",
-            "Run FSRS practice queues, submit answers, or start adaptive exam simulations (actions: next, answer, exam_sim; full practice engine lands in M6).",
+            "Practise with the FSRS queue, answer items (closed formats graded by the engine, open formats by rubric), or run a timed adaptive exam simulation (actions: next, answer, exam_sim).",
             false,
             false,
         ),
@@ -467,6 +467,50 @@ pub fn hash_to_path_map(state: &State) -> BTreeMap<String, String> {
         }
     }
     map
+}
+
+/// Files that look like assessments and await the user's yes or no (S26),
+/// as `needs_user` questions.
+pub fn assessment_questions(ws: &Workspace, state: &State) -> Vec<Value> {
+    lucubra_ingest::classify::assessment_suggestions(ws, state)
+        .into_iter()
+        .map(|(path, hash)| {
+            serde_json::json!({
+                "kind": "assessment_tag",
+                "path": path,
+                "file_hash": hash,
+                "question": format!(
+                    "'{path}' looks like graded coursework. Tag it as an assessment so help on it stays to hints and checks (tutor mode)? Answer with lucubra_submit(action=\"tag\", path, assessment=true or false)."
+                ),
+            })
+        })
+        .collect()
+}
+
+/// Tutor-mode guidance attached to reads and hits from an assessment-tagged
+/// file (S26, S40).
+pub const TUTOR_GUIDANCE: &str = "This file is tagged as an assessment. Give hints, guiding questions and checks of the student's own working; never write an answer they could submit.";
+
+/// Whether the file with full hash `hash` is tagged as an assessment.
+pub fn is_assessment(state: &State, hash: &str) -> bool {
+    let Some(file) = state.get(col::FILES, hash) else {
+        return false;
+    };
+    file.get("assessment").and_then(Value::as_bool) == Some(true)
+        || file
+            .get("tags")
+            .and_then(Value::as_array)
+            .is_some_and(|tags| tags.iter().any(|t| t.as_str() == Some("assessment")))
+        || file
+            .get("tag")
+            .and_then(Value::as_str)
+            .is_some_and(|t| t.eq_ignore_ascii_case("assessment"))
+}
+
+/// `tutor_mode` block for a response about `hash`, if it is an assessment.
+pub fn tutor_mode(state: &State, hash: &str) -> Option<Value> {
+    is_assessment(state, hash)
+        .then(|| serde_json::json!({"active": true, "guidance": TUTOR_GUIDANCE}))
 }
 
 /// Resolves a full 64-char hash or unique prefix across `col::FILES`.

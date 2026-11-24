@@ -14,7 +14,7 @@ use lucubra_core::projection::is_projection_path;
 use lucubra_core::{Error, Result};
 
 /// Top-level folders that are never ingested.
-pub const SKIP_TOP: &[&str] = &[".lucubra", "packs", "sessions", "dashboard"];
+pub const SKIP_TOP: &[&str] = &[".lucubra", "packs", "sessions", "dashboard", "exports"];
 
 /// Generated files outside the projection index set.
 const GENERATED: &[&str] = &["schedule/lucubra-plan.ics"];
@@ -193,6 +193,7 @@ mod tests {
             "packs/p.md",
             "sessions/SESSION_x.md",
             "dashboard/index.html",
+            "exports/anki/bio.apkg",
             "inbox/~$lock.docx",
             "inbox/.hidden",
             ".obsidian/app.json",

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // Engineered by uncoalesced
 
-//! `lucubra_export`: session brief export (live) and host-aware deferred export stubs (`A6`).
+//! `lucubra_export`: session brief, Anki deck and calendar exports, plus
+//! host-aware stubs for later milestones (`A6`).
 
+use lucubra_core::anki;
 use lucubra_core::state::col;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
@@ -34,6 +36,70 @@ pub struct ExportArgs {
     /// Optional completed-step checkpoints to log alongside this call.
     #[serde(default)]
     pub progress: Option<Vec<ProgressEntry>>,
+}
+
+fn as_card_text(v: Option<&Value>) -> String {
+    match v {
+        Some(Value::String(s)) => s.clone(),
+        Some(Value::Array(a)) => a
+            .iter()
+            .map(|x| x.as_str().map_or_else(|| x.to_string(), str::to_owned))
+            .collect::<Vec<_>>()
+            .join(", "),
+        Some(other) => other.to_string(),
+        None => String::new(),
+    }
+}
+
+/// Every stored practice item of `subject` (or all subjects) as a card.
+fn anki_cards(
+    state: &lucubra_core::state::State,
+    paths: &std::collections::BTreeMap<String, String>,
+    subject: Option<&str>,
+) -> Vec<anki::AnkiCard> {
+    state
+        .collection(col::ITEMS)
+        .filter(|(_, i)| {
+            let unit = i.get("unit").and_then(Value::as_str).unwrap_or_default();
+            subject.is_none_or(|s| unit.split('/').next() == Some(s))
+        })
+        .map(|(id, i)| {
+            let mut front = as_card_text(i.get("prompt"));
+            if let Some(Value::Array(opts)) = i.get("options") {
+                for o in opts {
+                    front.push_str(&format!(
+                        "
+- {}",
+                        as_card_text(Some(o))
+                    ));
+                }
+            }
+            let source = i
+                .get("sources")
+                .and_then(Value::as_array)
+                .and_then(|s| s.first())
+                .map(|s| {
+                    let hash = s
+                        .get("file_hash")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    let loc = s
+                        .get("location")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    format!("{} {loc}", paths.get(hash).map_or("", String::as_str))
+                })
+                .unwrap_or_else(|| "beyond your notes".into());
+            let unit = i.get("unit").and_then(Value::as_str).unwrap_or_default();
+            anki::AnkiCard {
+                id: id.clone(),
+                front,
+                back: as_card_text(i.get("answer")),
+                source: source.trim().to_owned(),
+                tags: unit.split('/').map(str::to_owned).collect(),
+            }
+        })
+        .collect()
 }
 
 pub fn execute(
@@ -139,25 +205,83 @@ pub fn execute(
             })
         }
         "anki" => {
-            if let Some(fmt) = format
-                && !matches!(fmt, "apkg" | "tsv")
-            {
+            let fmt = format.unwrap_or("apkg");
+            if !matches!(fmt, "apkg" | "tsv") {
                 return Err(ToolError::new(
                     ToolErrorCode::InvalidArguments,
                     "format for action 'anki' must be 'apkg' or 'tsv'",
                 ));
             }
-            Err(ToolError::new(
-                ToolErrorCode::NotImplemented,
-                "Anki export is implemented in milestone M6.",
-            )
-            .with_detail(ctx.host.profile.export_recipe))
+            let subject = opt_str(args, "subject")?;
+            if let Some(s) = subject {
+                check_slug("subject", s)?;
+            }
+            let state = ctx
+                .ws
+                .replay()
+                .map_err(|e| ToolError::new(ToolErrorCode::WorkspaceError, e.to_string()))?
+                .state;
+            let paths = crate::tools::hash_to_path_map(&state);
+            let cards = anki_cards(&state, &paths, subject);
+            if cards.is_empty() {
+                return Err(ToolError::new(
+                    ToolErrorCode::NotFound,
+                    "no practice items to export yet; store some with lucubra_submit(action=\"items\")",
+                ));
+            }
+            let day = lucubra_core::planner::iso_from_days(crate::tools::practice::today_day());
+            let stem = format!("{}_{day}", subject.unwrap_or("all"));
+            let rel = format!("exports/anki/{stem}.{fmt}");
+            let abs = ctx.ws.root().join(&rel);
+            let deck = format!("Lucubra::{}", subject.unwrap_or("All subjects"));
+            let written = if fmt == "apkg" {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.as_millis() as i64);
+                anki::write_apkg(&abs, &deck, &cards, now).map_err(|e| e.to_string())
+            } else {
+                std::fs::create_dir_all(abs.parent().unwrap_or(ctx.ws.root()))
+                    .and_then(|()| std::fs::write(&abs, anki::tsv(&cards)))
+                    .map_err(|e| e.to_string())
+            };
+            written.map_err(|e| {
+                ToolError::new(
+                    ToolErrorCode::WorkspaceError,
+                    format!("Anki export failed: {e}"),
+                )
+            })?;
+            Ok(ToolOutcome {
+                data: json!({
+                    "path": rel,
+                    "format": fmt,
+                    "deck": deck,
+                    "cards": cards.len(),
+                    "notice": anki::NOTICE,
+                }),
+                next: None,
+                warnings: Vec::new(),
+                per_call_limit: limits.response_limit,
+                suppress_wrap_up: false,
+                active_session_override: None,
+            })
         }
-        "ics" => Err(ToolError::new(
-            ToolErrorCode::NotImplemented,
-            "Calendar (.ics) export is implemented in milestone M5.",
-        )
-        .with_detail(ctx.host.profile.export_recipe)),
+        "ics" => {
+            let rel = "schedule/lucubra-plan.ics";
+            if !ctx.ws.root().join(rel).is_file() {
+                return Err(ToolError::new(
+                    ToolErrorCode::NotFound,
+                    "no calendar yet; accept a plan or set an exam date first",
+                ));
+            }
+            Ok(ToolOutcome {
+                data: json!({"path": rel, "format": "ics"}),
+                next: None,
+                warnings: Vec::new(),
+                per_call_limit: limits.response_limit,
+                suppress_wrap_up: false,
+                active_session_override: None,
+            })
+        }
         "pack" => {
             if let Some(fmt) = format
                 && !matches!(fmt, "md" | "pdf")
