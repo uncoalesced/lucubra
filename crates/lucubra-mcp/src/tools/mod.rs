@@ -137,7 +137,7 @@ pub fn build_tools() -> Vec<Tool> {
         ),
         tool_def::<submit::SubmitArgs>(
             "lucubra_submit",
-            "Submit generated study artifacts: unit_summary, transcript, session_summary, classification, items, or grades.",
+            "Submit generated study artifacts: unit_summary, transcript, session_summary, classification, items (grounded by quoted anchors), grades (rubric scores), or tag (assessment on or off).",
             false,
             false,
         ),
@@ -155,7 +155,7 @@ pub fn build_tools() -> Vec<Tool> {
         ),
         tool_def::<practice::PracticeArgs>(
             "lucubra_practice",
-            "Run FSRS practice queues, submit answers, or start adaptive exam simulations (actions: next, answer, exam_sim; full practice engine lands in M6).",
+            "Practise with the FSRS queue, answer items (closed formats graded by the engine, open formats by rubric), or run a timed adaptive exam simulation (actions: next, answer, exam_sim).",
             false,
             false,
         ),
@@ -467,6 +467,24 @@ pub fn hash_to_path_map(state: &State) -> BTreeMap<String, String> {
         }
     }
     map
+}
+
+/// Files that look like assessments and await the user's yes or no (S26),
+/// as `needs_user` questions.
+pub fn assessment_questions(ws: &Workspace, state: &State) -> Vec<Value> {
+    lucubra_ingest::classify::assessment_suggestions(ws, state)
+        .into_iter()
+        .map(|(path, hash)| {
+            serde_json::json!({
+                "kind": "assessment_tag",
+                "path": path,
+                "file_hash": hash,
+                "question": format!(
+                    "'{path}' looks like graded coursework. Tag it as an assessment so help on it stays to hints and checks (tutor mode)? Answer with lucubra_submit(action=\"tag\", path, assessment=true or false)."
+                ),
+            })
+        })
+        .collect()
 }
 
 /// Tutor-mode guidance attached to reads and hits from an assessment-tagged
