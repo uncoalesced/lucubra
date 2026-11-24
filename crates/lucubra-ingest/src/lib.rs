@@ -9,6 +9,7 @@ pub mod discover;
 pub mod doctor;
 pub mod eda;
 pub mod epub;
+pub mod ground;
 pub mod hash;
 pub mod index;
 pub mod limits;

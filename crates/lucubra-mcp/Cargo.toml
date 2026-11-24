@@ -16,6 +16,7 @@ ureq.workspace = true
 blake3.workspace = true
 lucubra-core.workspace = true
 lucubra-ingest.workspace = true
+lucubra-pack.workspace = true
 rmcp.workspace = true
 schemars.workspace = true
 serde.workspace = true

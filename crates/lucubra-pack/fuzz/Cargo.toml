@@ -1,0 +1,23 @@
+[package]
+name = "lucubra-pack-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+# Kept out of the main workspace: built only by `cargo +nightly fuzz`.
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+lucubra-pack = { path = ".." }
+
+[[bin]]
+name = "handoff_parser"
+path = "fuzz_targets/handoff_parser.rs"
+test = false
+doc = false
+bench = false

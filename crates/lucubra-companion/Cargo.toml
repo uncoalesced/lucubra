@@ -9,6 +9,13 @@ publish.workspace = true
 
 [dependencies]
 lucubra-core.workspace = true
+lucubra-pack.workspace = true
+blake3.workspace = true
+serde_json.workspace = true
+ulid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

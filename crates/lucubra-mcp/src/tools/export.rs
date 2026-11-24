@@ -30,7 +30,7 @@ pub struct ExportArgs {
     /// Exam id filter (for mock_test).
     #[serde(default)]
     pub exam_id: Option<String>,
-    /// Output format: apkg or tsv (for anki); md or pdf (for pack/mock_test).
+    /// Output format: apkg or tsv (for anki); md (for pack); md or pdf (for mock_test).
     #[serde(default)]
     pub format: Option<String>,
     /// Optional completed-step checkpoints to log alongside this call.
@@ -284,18 +284,49 @@ pub fn execute(
         }
         "pack" => {
             if let Some(fmt) = format
-                && !matches!(fmt, "md" | "pdf")
+                && fmt != "md"
             {
                 return Err(ToolError::new(
                     ToolErrorCode::InvalidArguments,
-                    "format for action 'pack' must be 'md' or 'pdf'",
+                    "format for action 'pack' must be 'md'",
                 ));
             }
-            Err(ToolError::new(
-                ToolErrorCode::NotImplemented,
-                "Portable Study-Pack compilation is implemented in milestone M7.",
-            )
-            .with_detail(ctx.host.profile.export_recipe))
+            let ws_fail = |e: lucubra_core::Error| {
+                ToolError::new(
+                    ToolErrorCode::WorkspaceError,
+                    format!("pack build failed: {e}"),
+                )
+            };
+            let state = ctx.ws.replay().map_err(ws_fail)?.state;
+            let budget = limits
+                .pack_limit
+                .unwrap_or(lucubra_pack::build::FREE_BUDGET);
+            let previous = lucubra_pack::build::last_fingerprint(&state);
+            let pack = lucubra_pack::build::build(
+                &state,
+                lucubra_pack::build::Options {
+                    today: crate::tools::practice::today_day(),
+                    budget,
+                },
+            );
+            let fingerprint = lucubra_pack::build::write(ctx.ws, &pack).map_err(ws_fail)?;
+            let changed = previous.as_deref() != Some(fingerprint.as_str());
+            Ok(ToolOutcome {
+                data: json!({
+                    "folder": "packs",
+                    "files": pack.files.keys().collect::<Vec<_>>(),
+                    "tokens": pack.tokens(),
+                    "budget": budget,
+                    "fingerprint": fingerprint,
+                    "changed_since_last_build": changed,
+                    "delivery": "Upload the files in packs/ to a project, Gem or skill (at most four files), or let a Drive connector read the folder directly. Re-upload when changed_since_last_build is true.",
+                }),
+                next: None,
+                warnings: Vec::new(),
+                per_call_limit: limits.response_limit,
+                suppress_wrap_up: false,
+                active_session_override: None,
+            })
         }
         "dashboard" => Err(ToolError::new(
             ToolErrorCode::NotImplemented,

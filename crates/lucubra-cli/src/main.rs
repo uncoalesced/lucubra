@@ -93,6 +93,8 @@ enum Command {
     Watch(Target),
     /// Start the MCP server over stdio.
     Mcp(Target),
+    /// Start the companion page on 127.0.0.1 and print its address.
+    Serve(Target),
 }
 
 fn print_scan(report: &lucubra_ingest::ScanReport) {
@@ -260,6 +262,16 @@ fn run(command: Command) -> lucubra_core::Result<()> {
             let (hash, report) = ws.reset()?;
             print_report(&report);
             println!("state-hash: {hash}");
+        }
+        Command::Serve(target) => {
+            let ws = Workspace::open(&workspace_path(&target), &data_dir)?;
+            let server = lucubra_companion::Companion::bind()
+                .map_err(|e| lucubra_core::Error::io("starting the companion page", e))?;
+            println!("Lucubra companion page: {}", server.url());
+            println!("Keep this address private; press Ctrl+C to stop.");
+            server
+                .serve(&ws)
+                .map_err(|e| lucubra_core::Error::io("serving the companion page", e))?;
         }
         Command::Status(target) => {
             let ws = Workspace::open(&workspace_path(&target), &data_dir)?;

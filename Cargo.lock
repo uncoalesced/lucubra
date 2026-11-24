@@ -1189,7 +1189,12 @@ dependencies = [
 name = "lucubra-companion"
 version = "0.0.1"
 dependencies = [
+ "blake3",
  "lucubra-core",
+ "lucubra-pack",
+ "serde_json",
+ "tempfile",
+ "ulid",
 ]
 
 [[package]]
@@ -1233,6 +1238,7 @@ dependencies = [
  "blake3",
  "lucubra-core",
  "lucubra-ingest",
+ "lucubra-pack",
  "rmcp",
  "schemars",
  "serde",
@@ -1250,7 +1256,13 @@ dependencies = [
 name = "lucubra-pack"
 version = "0.0.1"
 dependencies = [
+ "blake3",
  "lucubra-core",
+ "lucubra-ingest",
+ "proptest",
+ "serde_json",
+ "tempfile",
+ "ulid",
 ]
 
 [[package]]
