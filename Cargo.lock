@@ -1251,6 +1251,10 @@ name = "lucubra-pack"
 version = "0.0.1"
 dependencies = [
  "lucubra-core",
+ "lucubra-ingest",
+ "proptest",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
