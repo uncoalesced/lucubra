@@ -50,6 +50,8 @@ pub mod col {
     pub const CARDS: &str = "cards";
     /// Exam simulations by sim id: staircase step, counts and status.
     pub const EXAM_SIMS: &str = "exam_sims";
+    /// Pack-mode handoff blocks already ingested, by session id.
+    pub const HANDOFFS: &str = "handoffs";
 }
 
 /// Event types the engine folds into state. Other known types are stored in
@@ -89,6 +91,8 @@ pub const FOLDED_TYPES: &[&str] = &[
     "card.reviewed",
     "exam_sim.started",
     "exam_sim.completed",
+    "pack.built",
+    "handoff.ingested",
 ];
 
 /// Why an event did not change state.
@@ -411,6 +415,13 @@ impl State {
                     sim.insert(format!("{status}_ts"), Value::String(event.ts.clone()));
                 }
                 self.merge(col::EXAM_SIMS, id, &sim);
+            }
+            "pack.built" => {
+                self.put(col::WORKSPACE, "pack", data.clone());
+            }
+            "handoff.ingested" => {
+                let sid = str_field(data, "session_id").ok_or(Skip::BadPayload("session_id"))?;
+                self.put(col::HANDOFFS, sid, data.clone());
             }
             "transcript.saved" => {
                 let hash = str_field(data, "hash").ok_or(Skip::BadPayload("hash"))?;
