@@ -1189,7 +1189,12 @@ dependencies = [
 name = "lucubra-companion"
 version = "0.0.1"
 dependencies = [
+ "blake3",
  "lucubra-core",
+ "lucubra-pack",
+ "serde_json",
+ "tempfile",
+ "ulid",
 ]
 
 [[package]]
