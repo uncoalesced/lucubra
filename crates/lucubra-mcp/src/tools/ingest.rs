@@ -27,7 +27,7 @@ use crate::tools::{
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct IngestArgs {
-    /// Action: scan, status, approve_layout, undo_moves, or fetch.
+    /// Action: scan, status, approve_layout, undo_moves, handoff, or fetch.
     pub action: String,
     /// Run extraction after scanning (default: true).
     #[serde(default)]
@@ -57,7 +57,10 @@ pub struct IngestArgs {
     /// Scope for undo_moves: last (default) or all.
     #[serde(default)]
     pub scope: Option<String>,
-    /// HTTPS URL from SOURCES.md for fetch (M6).
+    /// Pasted text holding a lucubra-handoff block (for handoff).
+    #[serde(default)]
+    pub text: Option<String>,
+    /// HTTPS URL from SOURCES.md for fetch.
     #[serde(default)]
     pub url: Option<String>,
     /// Optional completed-step checkpoints to log alongside this call.
@@ -182,7 +185,14 @@ pub fn execute(
 ) -> std::result::Result<ToolOutcome, ToolError> {
     let action = require_action(
         args,
-        &["scan", "status", "approve_layout", "undo_moves", "fetch"],
+        &[
+            "scan",
+            "status",
+            "approve_layout",
+            "undo_moves",
+            "handoff",
+            "fetch",
+        ],
     )?;
 
     let pre_state = ctx
@@ -276,6 +286,15 @@ pub fn execute(
                 }
             }
 
+            // Handoff blocks first: filing may move inbox files away.
+            let handoffs: Vec<Value> = lucubra_pack::ingest::ingest_inbox(ctx.ws)
+                .map_err(ws_error)?
+                .into_iter()
+                .map(|(path, outcomes)| {
+                    json!({"path": path,
+                           "blocks": outcomes.iter().map(|o| o.to_json()).collect::<Vec<_>>()})
+                })
+                .collect();
             let classified = classify_pending(ctx.ws, true).map_err(ws_error)?;
             let filed = file_inbox(&ctx)?;
             let state = ctx
@@ -319,6 +338,7 @@ pub fn execute(
                         "needs_host": classified.batch.len(),
                     },
                     "inbox_filed": filed,
+                    "handoffs": handoffs,
                     "status": status_summary,
                 }),
                 next: Some(next.into()),
@@ -486,6 +506,43 @@ pub fn execute(
             Ok(ToolOutcome {
                 data: move_summary(&report),
                 next: Some("ready".into()),
+                warnings: Vec::new(),
+                per_call_limit: limits.response_limit,
+                suppress_wrap_up: false,
+                active_session_override: None,
+            })
+        }
+        "handoff" => {
+            check_keys(
+                args,
+                &["action", "text", "progress"],
+                "lucubra_ingest(handoff)",
+            )?;
+            let text = req_str(
+                args,
+                "text",
+                "provide 'text' holding the whole lucubra-handoff block, from its first line to 'end: lucubra-handoff'",
+            )?;
+            if text.len() > 2_000_000 {
+                return Err(ToolError::new(
+                    ToolErrorCode::InvalidArguments,
+                    "text is larger than 2 MB; paste only the handoff block",
+                ));
+            }
+            let outcomes =
+                lucubra_pack::ingest::ingest_text(ctx.ws, text, "paste").map_err(ws_error)?;
+            if outcomes.is_empty() {
+                return Err(ToolError::new(
+                    ToolErrorCode::InvalidArguments,
+                    "no lucubra-handoff block found; copy the block starting at its 'lucubra-handoff v1' line",
+                ));
+            }
+            let failed = outcomes
+                .iter()
+                .any(|o| matches!(o, lucubra_pack::ingest::Outcome::Failed(_)));
+            Ok(ToolOutcome {
+                data: json!({"blocks": outcomes.iter().map(|o| o.to_json()).collect::<Vec<_>>()}),
+                next: Some(if failed { "copy_block_again" } else { "orient" }.into()),
                 warnings: Vec::new(),
                 per_call_limit: limits.response_limit,
                 suppress_wrap_up: false,
