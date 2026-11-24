@@ -12,6 +12,7 @@ default = []
 http-transport = ["rmcp/transport-streamable-http-server"]
 
 [dependencies]
+ureq.workspace = true
 lucubra-core.workspace = true
 lucubra-ingest.workspace = true
 rmcp.workspace = true

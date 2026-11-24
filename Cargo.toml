@@ -35,6 +35,7 @@ schemars = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "sync", "time", "signal"] }
 tokio-util = "0.7"
 tracing = "0.1"
+ureq = { version = "3.5", default-features = false, features = ["rustls-no-provider", "_ring", "platform-verifier"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter"] }
 
 [workspace.lints.rust]

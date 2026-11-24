@@ -67,6 +67,58 @@ fn ws_err(e: lucubra_core::Error) -> ToolError {
     )
 }
 
+/// The highest-priority unit for the next session, as `<subject>/<unit>`.
+fn next_proposal(state: &State) -> Option<String> {
+    use lucubra_core::planner::{PlannerConfig, schedule, work_items};
+    let cfg = PlannerConfig::default();
+    let days = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() / 86_400) as i64;
+    let domain = state
+        .get(col::PROFILE, "programme")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let items = work_items(&cfg, state, days, domain);
+    let cap = cfg.default_capacity;
+    schedule(&cfg, &items, &[cap], cap)
+        .blocks
+        .first()
+        .map(|b| format!("{}/{}", b.subject, b.unit))
+}
+
+/// Closes open sessions idle longer than the recovery window as
+/// `recovered` (SPEC section 15). Returns the recovered session ids.
+pub fn recover_idle(ws: &lucubra_core::Workspace) -> lucubra_core::Result<Vec<String>> {
+    use lucubra_core::calendar::parse_minutes;
+    let cfg = lucubra_core::planner::PlannerConfig::default();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() / 60) as i64;
+    let idle = (cfg.recovery_idle_ms / 60_000) as i64;
+    let state = ws.replay()?.state;
+    let mut recovered = Vec::new();
+    for (sid, s) in state.collection(col::SESSIONS) {
+        if sid == "_unattached" || s.get("status").and_then(Value::as_str) != Some("active") {
+            continue;
+        }
+        let last = ["last_ts", "started_ts"]
+            .iter()
+            .find_map(|k| s.get(*k).and_then(Value::as_str).and_then(parse_minutes));
+        if last.is_some_and(|t| now - t > idle) {
+            let mut payload = json!({"session_id": sid, "reason": "recovered"});
+            if let Some(next) = next_proposal(&state) {
+                payload["next_proposal"] = Value::String(next);
+            }
+            ws.append("session.ended", payload)?;
+            recovered.push(sid.clone());
+        }
+    }
+    if !recovered.is_empty() {
+        ws.project()?;
+    }
+    Ok(recovered)
+}
+
 fn latest_active_session(state: &State) -> Option<String> {
     state
         .collection(col::SESSIONS)
@@ -343,13 +395,20 @@ pub fn execute(
                 "session_id": sid,
                 "reason": reason,
             });
+            if let Some(next) = next_proposal(&state) {
+                end_payload["next_proposal"] = Value::String(next);
+            }
             if let Some(sum) = summary {
                 end_payload["summary"] = Value::String(sum.to_owned());
             }
             ctx.ws
                 .append("session.ended", end_payload)
                 .map_err(ws_err)?;
+            ctx.ws.project().map_err(ws_err)?;
             let updated_state = ctx.ws.replay().map_err(ws_err)?.state;
+            let session = updated_state.get(col::SESSIONS, &sid);
+            let handoff = session.and_then(lucubra_core::projection::session_file);
+            let next_session = session.and_then(|s| s.get("next_proposal")).cloned();
             let logged_minutes = updated_state
                 .get(col::SESSIONS, &sid)
                 .and_then(|v| v.get("logged_minutes"))
@@ -363,6 +422,8 @@ pub fn execute(
                     "reason": reason,
                     "logged_minutes": logged_minutes,
                     "summary": summary,
+                    "handoff_file": handoff,
+                    "next_session": next_session,
                 }),
                 next: None,
                 warnings: Vec::new(),

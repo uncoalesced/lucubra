@@ -17,6 +17,12 @@ allow = [
 confidence-threshold = 0.9
 unused-allowed-license = "allow"
 
+# Mozilla root certificate data used by the iCal HTTPS client's fallback
+# verifier (SPEC section 17); a permissive data licence, scoped to this crate.
+[[licenses.exceptions]]
+crate = "webpki-root-certs"
+allow = ["CDLA-Permissive-2.0"]
+
 [licenses.private]
 ignore = false
 

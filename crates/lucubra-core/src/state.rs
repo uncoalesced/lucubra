@@ -39,6 +39,8 @@ pub mod col {
     pub const SESSIONS: &str = "sessions";
     /// File moves by move id: hash, from, to, batch, and `undone` once reversed.
     pub const MOVES: &str = "moves";
+    /// Study plans by plan id: start date, blocks, triage, capacity, status.
+    pub const PLANS: &str = "plans";
 }
 
 /// Event types the engine folds into state. Other known types are stored in
@@ -61,6 +63,9 @@ pub const FOLDED_TYPES: &[&str] = &[
     "file.classified",
     "file.moved",
     "file.move_undone",
+    "plan.proposed",
+    "plan.edited",
+    "plan.accepted",
     "transcript.saved",
     "transcript.verified",
     "session.started",
@@ -242,6 +247,10 @@ impl State {
                 let hash = str_field(data, "hash").ok_or(Skip::BadPayload("hash"))?;
                 let mut file = fields.clone();
                 file.remove("path");
+                // Document metadata "subject" is free text, not a classification.
+                if let Some(meta) = file.remove("subject") {
+                    file.insert("meta_subject".into(), meta);
+                }
                 if event.kind == "file.extracted" {
                     // A later success clears an earlier failure.
                     file.insert("status".into(), Value::String("extracted".into()));
@@ -291,6 +300,17 @@ impl State {
                     entry.insert("undone".into(), Value::Bool(true));
                     self.merge(col::MOVES, id, &entry);
                 }
+            }
+            "plan.proposed" | "plan.edited" | "plan.accepted" => {
+                let id = str_field(data, "plan_id").ok_or(Skip::BadPayload("plan_id"))?;
+                let mut entry = fields.clone();
+                entry.remove("plan_id");
+                let status = event.kind.trim_start_matches("plan.");
+                entry.insert("status".into(), Value::String(status.to_owned()));
+                if event.kind == "plan.accepted" && !event.ts.is_empty() {
+                    entry.insert("accepted_ts".into(), Value::String(event.ts.clone()));
+                }
+                self.merge(col::PLANS, id, &entry);
             }
             "transcript.saved" => {
                 let hash = str_field(data, "hash").ok_or(Skip::BadPayload("hash"))?;
@@ -355,6 +375,9 @@ impl State {
                 }
                 if let Some(kind) = str_field(data, "kind") {
                     entry.insert("last_kind".into(), Value::String(kind.to_owned()));
+                }
+                if !event.ts.is_empty() {
+                    entry.insert("last_ts".into(), Value::String(event.ts.clone()));
                 }
                 self.merge(col::SESSIONS, sid, &entry);
             }
@@ -530,7 +553,11 @@ mod tests {
         .unwrap();
         let file = s.get(col::FILES, "h1").unwrap();
         assert_eq!(file["title"], "STAT201 Lecture 1");
-        assert_eq!(file["subject"], "Statistics");
+        assert_eq!(file["meta_subject"], "Statistics");
+        assert!(
+            file.get("subject").is_none(),
+            "metadata is not a classification"
+        );
 
         s.apply(&event(
             "transcript.saved",

@@ -48,13 +48,16 @@ pub fn is_slug(s: &str) -> bool {
 }
 
 /// Whether `rel` has the shape of a projection path: `AGENTS.md`,
-/// `subjects/<s>/agents_<s>.md` or `subjects/<s>/<u>/UNIT.md`.
+/// `subjects/<s>/agents_<s>.md`, `subjects/<s>/<u>/UNIT.md`,
+/// `sessions/SESSION_*.md` or `schedule/lucubra-plan.ics`.
 pub fn is_projection_path(rel: &str) -> bool {
     let parts: Vec<&str> = rel.split('/').collect();
     match parts.as_slice() {
         ["AGENTS.md"] => true,
         ["subjects", s, file] => is_slug(s) && *file == format!("agents_{s}.md"),
         ["subjects", s, u, "UNIT.md"] => is_slug(s) && is_slug(u),
+        ["schedule", "lucubra-plan.ics"] => true,
+        ["sessions", f] => f.starts_with("SESSION_") && f.ends_with(".md"),
         _ => false,
     }
 }
@@ -300,6 +303,172 @@ fn render_unit(state: &State, slug: &str, unit: &str, data: &Value) -> String {
     out
 }
 
+/// Session handoff path: `sessions/SESSION_<date>_<HHMM>_<slug>.md` (UTC).
+pub fn session_handoff_path(started_ts: &str, slug: &str) -> Option<String> {
+    let date = started_ts.get(..10)?;
+    let hhmm = format!("{}{}", started_ts.get(11..13)?, started_ts.get(14..16)?);
+    let slug: String = slug
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .chars()
+        .take(40)
+        .collect();
+    let slug = if slug.is_empty() {
+        "study".into()
+    } else {
+        slug
+    };
+    Some(format!("sessions/SESSION_{date}_{hhmm}_{slug}.md"))
+}
+
+/// Handoff file path for an ended session, or `None` while it is open.
+pub fn session_file(session: &Value) -> Option<String> {
+    if text(session, "status").as_deref() != Some("ended") {
+        return None;
+    }
+    let slug = text(session, "last_unit")
+        .or_else(|| list(session, "units").into_iter().next())
+        .unwrap_or_default();
+    session_handoff_path(&text(session, "started_ts")?, &slug)
+}
+
+fn render_session(data: &Value) -> String {
+    let get = |k: &str| text(data, k);
+    let num = |k: &str| data.get(k).and_then(Value::as_u64).unwrap_or(0);
+    let mut out = String::from("# Study session\n\n");
+    out.push_str(&format!(
+        "Started: {} (UTC)\nEnded: {} (UTC), reason: {}\n\n## Planned against done\n\n",
+        get("started_ts").unwrap_or_default(),
+        get("ended_ts").unwrap_or_default(),
+        get("reason").unwrap_or_else(|| "user".into()),
+    ));
+    let planned = list(data, "units");
+    if planned.is_empty() {
+        out.push_str("- Planned: no units named at start\n");
+    } else {
+        out.push_str(&format!("- Planned: {}\n", planned.join(", ")));
+    }
+    out.push_str(&format!(
+        "- Done: {} steps, {} minutes logged\n",
+        num("steps_count"),
+        num("logged_minutes")
+    ));
+    if let Some(unit) = get("last_unit") {
+        out.push_str(&format!("- Last unit worked on: {unit}\n"));
+    }
+    if let Some(next) = get("next_proposal") {
+        out.push_str(&format!("\n## Next session\n\nStart with {next}.\n"));
+    }
+    if let Some(summary) = get("summary") {
+        out.push_str(&format!(
+            "\n## Summary (written by the assistant)\n\n{}\n",
+            one_line(&summary)
+        ));
+    }
+    out
+}
+
+fn ics_text(s: &str) -> String {
+    one_line(s)
+        .replace('\\', "\\\\")
+        .replace(';', "\\;")
+        .replace(',', "\\,")
+}
+
+/// Calendar of exams and the latest accepted plan, for import into any
+/// calendar app (SPEC section 17). Study blocks start at 18:00 local time.
+fn render_ics(state: &State) -> Option<String> {
+    let plan = state
+        .collection(col::PLANS)
+        .filter(|(_, p)| text(p, "status").as_deref() == Some("accepted"))
+        .last()
+        .map(|(id, p)| (id.clone(), p));
+    let exams: Vec<(&String, &Value)> = state
+        .collection(col::EXAMS)
+        .filter(|(_, e)| text(e, "date").is_some())
+        .collect();
+    if plan.is_none() && exams.is_empty() {
+        return None;
+    }
+    let stamp = plan
+        .as_ref()
+        .and_then(|(_, p)| text(p, "accepted_ts"))
+        .map(|ts| {
+            ts.replace(['-', ':'], "")
+                .chars()
+                .take(15)
+                .collect::<String>()
+                + "Z"
+        })
+        .unwrap_or_else(|| "19700101T000000Z".into());
+    let mut lines = vec![
+        "BEGIN:VCALENDAR".to_owned(),
+        "VERSION:2.0".to_owned(),
+        "PRODID:-//Lucubra//Study plan//EN".to_owned(),
+    ];
+    for (id, exam) in exams {
+        let date = text(exam, "date").unwrap_or_default().replace('-', "");
+        let title = text(exam, "title").unwrap_or_else(|| id.clone());
+        lines.extend([
+            "BEGIN:VEVENT".to_owned(),
+            format!("UID:exam-{id}@lucubra"),
+            format!("DTSTAMP:{stamp}"),
+            format!("DTSTART;VALUE=DATE:{}", date.get(..8).unwrap_or_default()),
+            format!("SUMMARY:{}", ics_text(&format!("Exam: {title}"))),
+            "END:VEVENT".to_owned(),
+        ]);
+    }
+    if let Some((plan_id, plan)) = plan {
+        let mut clock: BTreeMap<String, u32> = BTreeMap::new();
+        let blocks = plan
+            .get("blocks")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        for (n, block) in blocks.iter().enumerate() {
+            let (Some(date), Some(minutes)) = (
+                text(block, "date"),
+                block.get("minutes").and_then(Value::as_u64),
+            ) else {
+                continue;
+            };
+            let start = *clock.entry(date.clone()).or_insert(18 * 60);
+            let end = start + minutes as u32;
+            let pause = block
+                .get("break_after")
+                .and_then(Value::as_u64)
+                .unwrap_or(0) as u32;
+            clock.insert(date.clone(), end + pause);
+            let day = date.replace('-', "");
+            let fmt = |m: u32| format!("{day}T{:02}{:02}00", (m / 60).min(23), m % 60);
+            let what = format!(
+                "Study: {} / {}",
+                text(block, "subject").unwrap_or_default(),
+                text(block, "unit").unwrap_or_default()
+            );
+            lines.extend([
+                "BEGIN:VEVENT".to_owned(),
+                format!("UID:plan-{plan_id}-{n}@lucubra"),
+                format!("DTSTAMP:{stamp}"),
+                format!("DTSTART:{}", fmt(start)),
+                format!("DTEND:{}", fmt(end)),
+                format!("SUMMARY:{}", ics_text(&what)),
+                "END:VEVENT".to_owned(),
+            ]);
+        }
+    }
+    lines.push("END:VCALENDAR".to_owned());
+    Some(lines.join("\r\n") + "\r\n")
+}
+
 /// Renders every projection from state. Deterministic: LF endings, no times.
 pub fn render(state: &State) -> Rendered {
     let mut rendered = Rendered::default();
@@ -342,6 +511,16 @@ pub fn render(state: &State) -> Rendered {
                 render_unit(state, slug, unit, data),
             );
         }
+    }
+    for (_, session) in state.collection(col::SESSIONS) {
+        if let Some(path) = session_file(session) {
+            rendered.files.insert(path, render_session(session));
+        }
+    }
+    if let Some(ics) = render_ics(state) {
+        rendered
+            .files
+            .insert("schedule/lucubra-plan.ics".into(), ics);
     }
     rendered
 }
