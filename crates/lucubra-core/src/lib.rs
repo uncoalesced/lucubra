@@ -3,6 +3,7 @@
 
 //! Domain model, event log, replay, planner and storage for Lucubra.
 
+pub mod anki;
 pub mod appdata;
 pub mod cache;
 pub mod calendar;
