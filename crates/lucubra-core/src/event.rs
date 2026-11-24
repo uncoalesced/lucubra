@@ -57,6 +57,7 @@ pub const KNOWN_TYPES: &[&str] = &[
     "item.answered",
     "item.graded",
     "card.reviewed",
+    "exam_sim.started",
     "exam_sim.completed",
     // Wellbeing
     "checkin.logged",
