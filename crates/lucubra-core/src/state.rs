@@ -554,7 +554,10 @@ mod tests {
         let file = s.get(col::FILES, "h1").unwrap();
         assert_eq!(file["title"], "STAT201 Lecture 1");
         assert_eq!(file["meta_subject"], "Statistics");
-        assert!(file.get("subject").is_none(), "metadata is not a classification");
+        assert!(
+            file.get("subject").is_none(),
+            "metadata is not a classification"
+        );
 
         s.apply(&event(
             "transcript.saved",
