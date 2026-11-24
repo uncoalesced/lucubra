@@ -1250,6 +1250,7 @@ dependencies = [
 name = "lucubra-pack"
 version = "0.0.1"
 dependencies = [
+ "blake3",
  "lucubra-core",
  "lucubra-ingest",
  "proptest",
