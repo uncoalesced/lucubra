@@ -469,6 +469,32 @@ pub fn hash_to_path_map(state: &State) -> BTreeMap<String, String> {
     map
 }
 
+/// Tutor-mode guidance attached to reads and hits from an assessment-tagged
+/// file (S26, S40).
+pub const TUTOR_GUIDANCE: &str = "This file is tagged as an assessment. Give hints, guiding questions and checks of the student's own working; never write an answer they could submit.";
+
+/// Whether the file with full hash `hash` is tagged as an assessment.
+pub fn is_assessment(state: &State, hash: &str) -> bool {
+    let Some(file) = state.get(col::FILES, hash) else {
+        return false;
+    };
+    file.get("assessment").and_then(Value::as_bool) == Some(true)
+        || file
+            .get("tags")
+            .and_then(Value::as_array)
+            .is_some_and(|tags| tags.iter().any(|t| t.as_str() == Some("assessment")))
+        || file
+            .get("tag")
+            .and_then(Value::as_str)
+            .is_some_and(|t| t.eq_ignore_ascii_case("assessment"))
+}
+
+/// `tutor_mode` block for a response about `hash`, if it is an assessment.
+pub fn tutor_mode(state: &State, hash: &str) -> Option<Value> {
+    is_assessment(state, hash)
+        .then(|| serde_json::json!({"active": true, "guidance": TUTOR_GUIDANCE}))
+}
+
 /// Resolves a full 64-char hash or unique prefix across `col::FILES`.
 pub fn resolve_file_hash(
     state: &State,
