@@ -104,28 +104,8 @@ fn hash_for_rel_path(state: &State, rel: &str) -> Option<String> {
 }
 
 fn is_assessment_file(state: &State, hash_or_prefix: &str) -> bool {
-    let Ok(full) = resolve_file_hash(state, hash_or_prefix) else {
-        return false;
-    };
-    let Some(file) = state.get(col::FILES, &full) else {
-        return false;
-    };
-    if file.get("assessment").and_then(Value::as_bool) == Some(true) {
-        return true;
-    }
-    if file
-        .get("tags")
-        .and_then(Value::as_array)
-        .is_some_and(|tags| tags.iter().any(|t| t.as_str() == Some("assessment")))
-    {
-        return true;
-    }
-    if let Some(tag) = file.get("tag").and_then(Value::as_str)
-        && tag.eq_ignore_ascii_case("assessment")
-    {
-        return true;
-    }
-    false
+    resolve_file_hash(state, hash_or_prefix)
+        .is_ok_and(|full| crate::tools::is_assessment(state, &full))
 }
 
 fn validate_string_array(
