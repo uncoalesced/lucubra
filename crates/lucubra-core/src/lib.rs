@@ -8,6 +8,7 @@ pub mod cache;
 pub mod calendar;
 pub mod error;
 pub mod event;
+pub mod grader;
 pub mod grounding;
 pub mod hlc;
 pub mod log;
