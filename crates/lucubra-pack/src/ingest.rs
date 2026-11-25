@@ -9,6 +9,7 @@
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use lucubra_core::domain::ITEM_TYPES;
 use lucubra_core::planner::days_from_iso;
 use lucubra_core::srs::{self, Rating};
 use lucubra_core::state::{State, col};
@@ -68,22 +69,6 @@ impl Outcome {
         }
     }
 }
-
-const ITEM_TYPES: &[&str] = &[
-    "mcq_single",
-    "mcq_multi",
-    "cloze",
-    "true_false",
-    "matching",
-    "numeric",
-    "ordering",
-    "short_answer",
-    "long_answer",
-    "viva_prompt",
-    "case_stem",
-    "diagram_label",
-    "formula_recall",
-];
 
 fn today() -> i64 {
     SystemTime::now()
