@@ -247,8 +247,22 @@ pub enum UndoScope {
 /// Reverses moves, newest first. A taken original path gets a `-N` suffix.
 pub fn undo(ws: &Workspace, scope: UndoScope, session_id: Option<&str>) -> Result<MoveReport> {
     let root = ws.root();
-    let state = ws.replay()?.state;
-    // Move ids are ULIDs, so reversed key order is newest first.
+    let replay = ws.replay()?;
+    // Replay (HLC) order, not ULID key order: two ULIDs made in the same
+    // millisecond have random order, so keys cannot tell which batch is newest.
+    let rank: std::collections::HashMap<&str, usize> = replay
+        .ordered
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.kind == "file.moved")
+        .filter_map(|(i, e)| {
+            e.data
+                .get("move_id")
+                .and_then(Value::as_str)
+                .map(|id| (id, i))
+        })
+        .collect();
+    let state = &replay.state;
     let mut open: Vec<(&String, &Value)> = state
         .collection(col::MOVES)
         .filter(|(_, m)| m.get("undone") != Some(&Value::Bool(true)))
@@ -256,7 +270,7 @@ pub fn undo(ws: &Workspace, scope: UndoScope, session_id: Option<&str>) -> Resul
             session_id.is_none_or(|sid| m.get("session_id").and_then(Value::as_str) == Some(sid))
         })
         .collect();
-    open.reverse();
+    open.sort_by_key(|(id, _)| std::cmp::Reverse(rank.get(id.as_str()).copied()));
     if scope == UndoScope::Last
         && let Some(last) = open.first().and_then(|(_, m)| m.get("batch")).cloned()
     {
