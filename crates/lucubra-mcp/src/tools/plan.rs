@@ -10,8 +10,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use lucubra_core::calendar::{busy_per_day, ics_intervals, parse_minutes, stored_url};
 use lucubra_core::planner::{
-    PlannerConfig, Schedule, days_from_iso, iso_from_days, learned_capacity, overcommit, schedule,
-    work_items,
+    PlannerConfig, Schedule, days_from_iso, iso_from_days, overcommit, schedule, work_items,
 };
 use lucubra_core::state::{State, col};
 use serde::Deserialize;
@@ -123,13 +122,7 @@ fn fetch_ics(url: &str) -> std::result::Result<String, &'static str> {
 }
 
 fn capacity(cfg: &PlannerConfig, state: &State) -> u32 {
-    let done: Vec<u32> = state
-        .collection(col::SESSIONS)
-        .filter(|(_, s)| s.get("status").and_then(Value::as_str) == Some("ended"))
-        .filter_map(|(_, s)| s.get("logged_minutes").and_then(Value::as_u64))
-        .map(|m| m as u32)
-        .collect();
-    learned_capacity(cfg, &done)
+    lucubra_core::metrics::capacity(cfg, state)
 }
 
 struct Proposal {
@@ -145,8 +138,12 @@ fn build(
     ctx: &ToolContext<'_>,
     state: &State,
     default_days: u64,
+    focus_span: f64,
 ) -> std::result::Result<Proposal, ToolError> {
-    let cfg = PlannerConfig::default();
+    let cfg = PlannerConfig {
+        focus_span,
+        ..PlannerConfig::default()
+    };
     let days = opt_u64(
         args,
         "days",
@@ -311,7 +308,9 @@ pub fn execute(
     limits: BudgetLimits,
 ) -> std::result::Result<ToolOutcome, ToolError> {
     let action = require_action(args, &["propose", "edit", "accept", "horizon", "next"])?;
-    let state = ctx.ws.replay().map_err(ws_err)?.state;
+    let replay = ctx.ws.replay().map_err(ws_err)?;
+    let focus = lucubra_core::metrics::focus_span(&PlannerConfig::default(), &replay);
+    let state = replay.state;
     match action {
         "propose" | "horizon" => {
             check_keys(
@@ -337,7 +336,13 @@ pub fn execute(
                     limits,
                 ));
             }
-            let p = build(args, ctx, &state, if action == "horizon" { 30 } else { 7 })?;
+            let p = build(
+                args,
+                ctx,
+                &state,
+                if action == "horizon" { 30 } else { 7 },
+                focus,
+            )?;
             if p.schedule.blocks.is_empty() && p.schedule.triage.is_empty() {
                 return Ok(outcome(
                     json!({"planned": false, "message": "Nothing to plan yet: scan and classify study material first."}),
