@@ -20,7 +20,7 @@ use crate::tools::{
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SessionArgs {
-    /// Action: start, step, end, or resume.
+    /// Action: start, step, end, resume, or checkin.
     pub action: String,
     /// Target session ULID (for resume, or explicit step/end).
     #[serde(default)]
@@ -55,6 +55,18 @@ pub struct SessionArgs {
     /// Close any open session as "recovered" before starting a new one (for start).
     #[serde(default)]
     pub force_new: Option<bool>,
+    /// Hours slept last night, 0 to 24 (for checkin).
+    #[serde(default)]
+    pub sleep: Option<f64>,
+    /// Sleep quality 1 to 5 (for checkin).
+    #[serde(default)]
+    pub quality: Option<u64>,
+    /// Energy 1 to 5 (for checkin).
+    #[serde(default)]
+    pub energy: Option<u64>,
+    /// Local date of the check-in, `YYYY-MM-DD` (for checkin, default today).
+    #[serde(default)]
+    pub date: Option<String>,
     /// Optional completed-step checkpoints to log alongside this call.
     #[serde(default)]
     pub progress: Option<Vec<ProgressEntry>>,
@@ -115,6 +127,7 @@ pub fn recover_idle(ws: &lucubra_core::Workspace) -> lucubra_core::Result<Vec<St
     }
     if !recovered.is_empty() {
         ws.project()?;
+        lucubra_core::dashboard::write(ws, crate::tools::practice::today_day())?;
     }
     Ok(recovered)
 }
@@ -134,10 +147,41 @@ pub fn execute(
     ctx: &ToolContext<'_>,
     limits: BudgetLimits,
 ) -> std::result::Result<ToolOutcome, ToolError> {
-    let action = require_action(args, &["start", "step", "end", "resume"])?;
+    let action = require_action(args, &["start", "step", "end", "resume", "checkin"])?;
     let state = ctx.ws.replay().map_err(ws_err)?.state;
 
     match action {
+        "checkin" => {
+            check_keys(
+                args,
+                &["action", "sleep", "quality", "energy", "date"],
+                "lucubra_session(checkin)",
+            )?;
+            let fix = "checkin needs sleep (hours 0 to 24), quality and energy (1 to 5)";
+            let sleep = args
+                .get("sleep")
+                .and_then(Value::as_f64)
+                .ok_or_else(|| ToolError::new(ToolErrorCode::InvalidArguments, fix))?;
+            let quality = opt_u64(args, "quality", 1, 5, fix)?
+                .ok_or_else(|| ToolError::new(ToolErrorCode::InvalidArguments, fix))?;
+            let energy = opt_u64(args, "energy", 1, 5, fix)?
+                .ok_or_else(|| ToolError::new(ToolErrorCode::InvalidArguments, fix))?;
+            let today = lucubra_core::planner::iso_from_days(crate::tools::practice::today_day());
+            let date = opt_str(args, "date")?.unwrap_or(&today);
+            let payload = lucubra_core::metrics::checkin_payload(date, sleep, quality, energy)
+                .map_err(|e| ToolError::new(ToolErrorCode::InvalidArguments, e))?;
+            ctx.ws
+                .append("checkin.logged", payload.clone())
+                .map_err(ws_err)?;
+            Ok(ToolOutcome {
+                data: json!({"logged": payload}),
+                next: None,
+                warnings: Vec::new(),
+                per_call_limit: limits.response_limit,
+                suppress_wrap_up: false,
+                active_session_override: None,
+            })
+        }
         "start" => {
             check_keys(
                 args,
@@ -405,6 +449,8 @@ pub fn execute(
                 .append("session.ended", end_payload)
                 .map_err(ws_err)?;
             ctx.ws.project().map_err(ws_err)?;
+            lucubra_core::dashboard::write(ctx.ws, crate::tools::practice::today_day())
+                .map_err(ws_err)?;
             let updated_state = ctx.ws.replay().map_err(ws_err)?.state;
             let session = updated_state.get(col::SESSIONS, &sid);
             let handoff = session.and_then(lucubra_core::projection::session_file);
