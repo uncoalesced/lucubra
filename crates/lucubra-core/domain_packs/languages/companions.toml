@@ -1,0 +1,8 @@
+# MCP servers to recommend when matching files are in the workspace.
+# Lucubra only recommends them; it never installs or starts them.
+
+[[companions]]
+name = "Anki MCP server"
+purpose = "Lets the assistant add and review cards in your Anki collection."
+detect = [".apkg", ".colpkg"]
+search = "Anki MCP"
