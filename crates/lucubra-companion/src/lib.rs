@@ -122,6 +122,8 @@ impl Companion {
                 page(200, "Handoff", &handoff_body(ws, text, t))
             }
             ("POST", "/pack") => page(200, "Study pack", &pack_body(ws, t)),
+            ("GET", "/dashboard") => page(200, "Dashboard", &dashboard_body(ws, t)),
+            ("POST", "/checkin") => page(200, "Check-in", &checkin_body(ws, &req.body, t)),
             ("POST", "/open-packs") => {
                 let dir = ws.root().join("packs");
                 let opened = std::fs::create_dir_all(&dir).is_ok() && open_folder(&dir);
@@ -281,7 +283,8 @@ fn esc(s: &str) -> String {
 const STYLE: &str = "body{background:#333333;color:#FDFFFC;font-family:'IBM Plex Sans',system-ui,sans-serif;max-width:46rem;margin:2rem auto;padding:0 1rem;line-height:1.5}\
 h1,h2{font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600}h1{font-size:1.6rem}\
 a{color:#FDFFFC}button{background:#EF2D56;color:#FDFFFC;border:0;border-radius:4px;padding:.5rem 1rem;font:inherit;cursor:pointer}\
-button:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid #FDFFFC;outline-offset:2px}\
+button:focus-visible,textarea:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #FDFFFC;outline-offset:2px}\
+input{background:#262626;color:#FDFFFC;border:1px solid #888;font:inherit;padding:.25rem}\
 textarea{width:100%;min-height:12rem;background:#262626;color:#FDFFFC;border:1px solid #888;font-family:ui-monospace,monospace}\
 .card{border:1px solid #555;border-radius:6px;padding:1rem;margin:1rem 0}";
 
@@ -355,6 +358,12 @@ fn status_body(ws: &Workspace, t: &str) -> String {
     format!(
         "<h1>lucubra</h1><p>Workspace overview for {}.</p>\
 <div class=\"card\"><h2>Workspace</h2><p>{} subjects, {} units, {} files, {} practice items, {} sessions.</p></div>\
+<div class=\"card\"><h2>Dashboard</h2><p><a href=\"/dashboard?t={te}\">Open the dashboard</a> for readiness, study time, retention and the sleep view.</p></div>\
+<div class=\"card\"><h2>Daily check-in</h2><form method=\"post\" action=\"/checkin?t={te}\">\
+<p><label for=\"sleep\">Hours slept</label> <input id=\"sleep\" name=\"sleep\" type=\"number\" min=\"0\" max=\"24\" step=\"0.5\" required></p>\
+<p><label for=\"quality\">Sleep quality, 1 to 5</label> <input id=\"quality\" name=\"quality\" type=\"number\" min=\"1\" max=\"5\" required></p>\
+<p><label for=\"energy\">Energy, 1 to 5</label> <input id=\"energy\" name=\"energy\" type=\"number\" min=\"1\" max=\"5\" required></p>\
+<p><button type=\"submit\">Log today</button></p></form></div>\
 <div class=\"card\"><h2>Study pack</h2><p>{pack_state}</p>\
 <form method=\"post\" action=\"/pack?t={te}\"><button type=\"submit\">Rebuild the pack</button></form>\
 <form method=\"post\" action=\"/open-packs?t={te}\"><p><button type=\"submit\">Open the packs folder</button></p></form></div>\
@@ -368,6 +377,47 @@ fn status_body(ws: &Workspace, t: &str) -> String {
         count(col::ITEMS),
         count(col::SESSIONS),
     )
+}
+
+fn dashboard_body(ws: &Workspace, t: &str) -> String {
+    match ws.replay() {
+        Ok(replay) => lucubra_core::dashboard::body(&replay, today()) + &back(t),
+        Err(_) => format!("<p>The workspace could not be read.</p>{}", back(t)),
+    }
+}
+
+fn checkin_body(ws: &Workspace, body: &[u8], t: &str) -> String {
+    let form = parse_form(body);
+    let field = |k: &str| {
+        form.iter()
+            .find(|(name, _)| name == k)
+            .map(|(_, v)| v.trim().to_owned())
+            .unwrap_or_default()
+    };
+    let parsed = (
+        field("sleep").parse::<f64>(),
+        field("quality").parse::<u64>(),
+        field("energy").parse::<u64>(),
+    );
+    let (Ok(sleep), Ok(quality), Ok(energy)) = parsed else {
+        return format!(
+            "<p>Enter hours slept, and quality and energy from 1 to 5.</p>{}",
+            back(t)
+        );
+    };
+    let msg = match lucubra_core::metrics::checkin_payload(
+        &iso_from_days(today()),
+        sleep,
+        quality,
+        energy,
+    ) {
+        Ok(payload) => match ws.append("checkin.logged", payload) {
+            Ok(_) => "Today's check-in is saved.".to_owned(),
+            Err(e) => format!("The check-in could not be saved: {e}"),
+        },
+        Err(e) => format!("Not saved: {e}."),
+    };
+    format!("<p>{}</p>{}", esc(&msg), back(t))
 }
 
 fn handoff_body(ws: &Workspace, text: &str, t: &str) -> String {
