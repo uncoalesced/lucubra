@@ -1,0 +1,44 @@
+# Item and rubric templates. {placeholders} are filled by the host from your material;
+# every generated item still passes the grounding check.
+
+[[templates]]
+id = "sci-numeric"
+type = "numeric"
+exam_type = "numericals"
+prompt = "Calculate {quantity} for the problem at {location}. Give the value with its unit."
+
+[[templates]]
+id = "sci-formula"
+type = "formula_recall"
+exam_type = "theory"
+prompt = "State the formula or theorem at {location}."
+
+[[templates]]
+id = "sci-definition"
+type = "cloze"
+exam_type = "theory"
+prompt = "Complete the definition from {location}: {statement}"
+
+[[templates]]
+id = "sci-proof"
+type = "long_answer"
+exam_type = "theory"
+prompt = "Prove or derive the result at {location}."
+
+[[templates.rubric]]
+criterion = "Correct setup"
+max_points = 2
+
+[[templates.rubric]]
+criterion = "Valid steps"
+max_points = 4
+
+[[templates.rubric]]
+criterion = "Conclusion"
+max_points = 1
+
+[[templates]]
+id = "sci-diagram"
+type = "diagram_label"
+exam_type = "practical"
+prompt = "Label the apparatus or structure in the diagram at {location}."

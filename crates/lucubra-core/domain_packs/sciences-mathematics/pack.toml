@@ -1,0 +1,17 @@
+id = "sciences-mathematics"
+name = "Sciences and mathematics"
+version = "1.0.0"
+keywords = ["math", "stat", "physics", "chemistry", "biology", "zoology", "botany", "biotech", "numer", "b.sc", "bsc", "m.sc", "msc"]
+effort_factor = 1.5
+formats = ["pdf", "pptx", "tex", "ipynb", "csv", "ggb", "mlx", "rmd"]
+exam_types = ["theory", "numericals", "practical", "objective", "viva"]
+
+[[questions]]
+id = "pack_tools"
+prompt = "Which tools do you use for computation in labs?"
+example = "Python and GeoGebra"
+
+[[questions]]
+id = "pack_proofs"
+prompt = "Do your exams ask for full proofs or derivations?"
+example = "derivations only"
