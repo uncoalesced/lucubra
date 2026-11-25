@@ -88,28 +88,10 @@ pub fn iso_from_days(days: i64) -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
-/// Domain factor for effort (SPEC 12.1).
+/// Domain factor for effort (SPEC 12.1), from the matching domain pack's
+/// `effort_factor` (1.0 when no pack matches).
 pub fn domain_factor(domain: &str) -> f64 {
-    let d = domain.to_lowercase();
-    let has = |keys: &[&str]| keys.iter().any(|k| d.contains(k));
-    if has(&[
-        "math",
-        "stat",
-        "physics",
-        "engineering",
-        "numer",
-        "account",
-        "finance",
-        "tax",
-    ]) {
-        1.5
-    } else if has(&["medic", "mbbs", "nursing", "pharma"]) {
-        1.3
-    } else if has(&["english", "history", "literature", "humanit", "language"]) {
-        0.9
-    } else {
-        1.0
-    }
+    crate::domain::pack_for(domain).map_or(1.0, |p| p.meta.effort_factor)
 }
 
 /// Estimated study minutes for `tokens` of source text.
