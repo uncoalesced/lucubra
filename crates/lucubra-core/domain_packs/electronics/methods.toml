@@ -1,0 +1,4 @@
+# Exam type to session method overrides (SPEC 12.4).
+[methods]
+numericals = "Solve circuit problems step by step with units at every step, then check results against a simulation where one exists"
+practical = "Walk through the lab procedure, predict readings before measuring, and order the setup steps"

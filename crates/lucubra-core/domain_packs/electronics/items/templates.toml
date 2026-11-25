@@ -1,0 +1,40 @@
+# Item and rubric templates. {placeholders} are filled by the host from your material;
+# every generated item still passes the grounding check.
+
+[[templates]]
+id = "ece-circuit-value"
+type = "numeric"
+exam_type = "numericals"
+prompt = "Find {quantity} for the circuit at {location}. Give the value with its unit."
+
+[[templates]]
+id = "ece-formula"
+type = "formula_recall"
+exam_type = "theory"
+prompt = "Write the formula for {quantity} as given at {location}."
+
+[[templates]]
+id = "ece-truth-table"
+type = "matching"
+exam_type = "objective"
+prompt = "Match each input combination to the output of the logic circuit at {location}."
+
+[[templates]]
+id = "ece-lab-steps"
+type = "ordering"
+exam_type = "practical"
+prompt = "Order the steps of the lab procedure at {location}."
+
+[[templates]]
+id = "ece-explain"
+type = "short_answer"
+exam_type = "theory"
+prompt = "Explain why {component} behaves as described at {location}."
+
+[[templates.rubric]]
+criterion = "Correct principle"
+max_points = 2
+
+[[templates.rubric]]
+criterion = "Applies it to this circuit"
+max_points = 2

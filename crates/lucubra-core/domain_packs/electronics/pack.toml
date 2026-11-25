@@ -1,0 +1,17 @@
+id = "electronics"
+name = "Electronics"
+version = "1.0.0"
+keywords = ["electronic", "electrical", "ece", "eee", "vlsi", "embedded", "telecommunication"]
+effort_factor = 1.5
+formats = ["pdf", "pptx", "kicad_sch", "kicad_pcb", "cir", "asc", "ino", "v", "vhd"]
+exam_types = ["theory", "numericals", "practical", "viva", "objective"]
+
+[[questions]]
+id = "pack_simulator"
+prompt = "Which circuit simulator do your labs use?"
+example = "LTspice"
+
+[[questions]]
+id = "pack_hdl"
+prompt = "Do your courses use Verilog, VHDL or neither?"
+example = "Verilog"

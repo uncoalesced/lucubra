@@ -1,0 +1,20 @@
+# MCP servers to recommend when matching files are in the workspace.
+# Lucubra only recommends them; it never installs or starts them.
+
+[[companions]]
+name = "KiCad MCP server"
+purpose = "Lets the assistant read and edit KiCad schematics and boards."
+detect = [".kicad_sch", ".kicad_pcb", ".kicad_pro"]
+search = "KiCad MCP"
+
+[[companions]]
+name = "SPICE simulation MCP server"
+purpose = "Lets the assistant run circuit simulations."
+detect = [".cir", ".asc", ".net"]
+search = "SPICE MCP"
+
+[[companions]]
+name = "Arduino MCP server"
+purpose = "Lets the assistant build and upload Arduino sketches."
+detect = [".ino"]
+search = "Arduino MCP"
