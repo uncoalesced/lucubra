@@ -98,7 +98,12 @@ fn validate_and_apply_field(
     key: &str,
     val: &Value,
 ) -> std::result::Result<(), ToolError> {
-    if !REQUIRED_FIELDS.contains(&key) && !OPTIONAL_FIELDS.contains(&key) {
+    let pack_question = key.starts_with(lucubra_core::domain::QUESTION_PREFIX)
+        && ctx
+            .ws
+            .replay()
+            .is_ok_and(|r| lucubra_core::domain::is_pack_question(&r.state, key));
+    if !REQUIRED_FIELDS.contains(&key) && !OPTIONAL_FIELDS.contains(&key) && !pack_question {
         return Err(ToolError::new(
             ToolErrorCode::InvalidArguments,
             format!(
@@ -322,6 +327,7 @@ pub fn execute(
                     "exams": state.collections.get(col::EXAMS),
                     "settings": state.collections.get(col::SETTINGS),
                     "preferences_configured": pref.is_some(),
+                    "domain_pack_questions": lucubra_core::domain::pending_questions(&state),
                 }),
                 next: None,
                 warnings: Vec::new(),
@@ -395,7 +401,11 @@ pub fn execute(
                     ),
                 ));
             }
-            if !OPTIONAL_FIELDS.contains(&field) {
+            let pack_question = ctx
+                .ws
+                .replay()
+                .is_ok_and(|r| lucubra_core::domain::is_pack_question(&r.state, field));
+            if !OPTIONAL_FIELDS.contains(&field) && !pack_question {
                 return Err(ToolError::new(
                     ToolErrorCode::InvalidArguments,
                     format!(
