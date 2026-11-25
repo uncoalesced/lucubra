@@ -1,0 +1,4 @@
+# Exam type to session method overrides (SPEC 12.4).
+[methods]
+project = "Plan studio milestones back from the jury date, with rehearsal of the design narrative at each milestone"
+viva = "Present and defend design decisions aloud, with follow-up questions on site, programme and structure"

@@ -1,0 +1,21 @@
+# MCP servers to recommend when matching files are in the workspace.
+# Lucubra only recommends them; it never installs or starts them.
+
+[[companions]]
+name = "Blender MCP"
+purpose = "Lets the assistant inspect and edit Blender scenes."
+detect = [".blend"]
+url = "https://github.com/ahujasid/blender-mcp"
+search = "Blender MCP"
+
+[[companions]]
+name = "SketchUp MCP server"
+purpose = "Lets the assistant inspect and edit SketchUp models."
+detect = [".skp"]
+search = "SketchUp MCP"
+
+[[companions]]
+name = "Rhino MCP server"
+purpose = "Lets the assistant work with Rhino models."
+detect = [".3dm"]
+search = "Rhino MCP"
