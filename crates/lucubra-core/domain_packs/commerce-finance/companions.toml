@@ -1,0 +1,8 @@
+# MCP servers to recommend when matching files are in the workspace.
+# Lucubra only recommends them; it never installs or starts them.
+
+[[companions]]
+name = "Spreadsheet MCP server"
+purpose = "Lets the assistant read and edit spreadsheet workbooks."
+detect = [".xlsx", ".xls", ".ods"]
+search = "Excel MCP"
