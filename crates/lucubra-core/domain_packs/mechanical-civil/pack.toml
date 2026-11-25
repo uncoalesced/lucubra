@@ -1,0 +1,17 @@
+id = "mechanical-civil"
+name = "Mechanical and civil engineering"
+version = "1.0.0"
+keywords = ["mechanical", "civil", "aerospace", "aeronautic", "automobile", "production", "structural", "engineering"]
+effort_factor = 1.5
+formats = ["pdf", "pptx", "xlsx", "dwg", "dxf", "step", "stp", "iges", "fcstd", "ifc"]
+exam_types = ["theory", "numericals", "practical", "viva", "project"]
+
+[[questions]]
+id = "pack_cad_tool"
+prompt = "Which CAD software does your course use?"
+example = "FreeCAD"
+
+[[questions]]
+id = "pack_codes"
+prompt = "Which design codes or standards are used in your exams?"
+example = "IS 456"

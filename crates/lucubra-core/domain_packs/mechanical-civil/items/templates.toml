@@ -1,0 +1,44 @@
+# Item and rubric templates. {placeholders} are filled by the host from your material;
+# every generated item still passes the grounding check.
+
+[[templates]]
+id = "mech-numeric"
+type = "numeric"
+exam_type = "numericals"
+prompt = "Calculate {quantity} for the problem at {location}. Give the value with its unit."
+
+[[templates]]
+id = "mech-formula"
+type = "formula_recall"
+exam_type = "theory"
+prompt = "Write the expression for {quantity} as given at {location}."
+
+[[templates]]
+id = "mech-procedure"
+type = "ordering"
+exam_type = "practical"
+prompt = "Order the steps of the test procedure at {location}."
+
+[[templates]]
+id = "mech-true-false"
+type = "true_false"
+exam_type = "objective"
+prompt = "True or false, according to {location}: {statement}"
+
+[[templates]]
+id = "mech-derivation"
+type = "long_answer"
+exam_type = "theory"
+prompt = "Derive the result at {location}, stating each assumption."
+
+[[templates.rubric]]
+criterion = "Assumptions stated"
+max_points = 2
+
+[[templates.rubric]]
+criterion = "Correct steps"
+max_points = 4
+
+[[templates.rubric]]
+criterion = "Final result correct"
+max_points = 2

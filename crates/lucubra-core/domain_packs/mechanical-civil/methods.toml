@@ -1,0 +1,4 @@
+# Exam type to session method overrides (SPEC 12.4).
+[methods]
+numericals = "Solve worked problems with free-body diagrams and units at every step, graded with tolerance"
+practical = "Walk through the test procedure, predict readings, and check the lab record calculations"
