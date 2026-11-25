@@ -1,0 +1,52 @@
+# Item and rubric templates. {placeholders} are filled by the host from your material;
+# every generated item still passes the grounding check.
+
+[[templates]]
+id = "med-case-stem"
+type = "case_stem"
+exam_type = "osce"
+prompt = "A patient presents as described at {location}. Give the next step at each stage of the case."
+
+[[templates.rubric]]
+criterion = "Relevant history and examination"
+max_points = 3
+
+[[templates.rubric]]
+criterion = "Correct investigations"
+max_points = 2
+
+[[templates.rubric]]
+criterion = "Safe management plan"
+max_points = 3
+
+[[templates]]
+id = "med-sba"
+type = "mcq_single"
+exam_type = "objective"
+prompt = "Choose the single best answer for the scenario at {location}."
+
+[[templates]]
+id = "med-image-label"
+type = "diagram_label"
+exam_type = "practical"
+prompt = "Label the structures marked on the image at {location}."
+
+[[templates]]
+id = "med-drug-fact"
+type = "cloze"
+exam_type = "theory"
+prompt = "Complete the drug fact from {location}: {statement}"
+
+[[templates]]
+id = "med-viva"
+type = "viva_prompt"
+exam_type = "viva"
+prompt = "Describe the pathophysiology of {condition} as you would to an examiner."
+
+[[templates.rubric]]
+criterion = "Accurate mechanism"
+max_points = 3
+
+[[templates.rubric]]
+criterion = "Links to clinical features"
+max_points = 2
