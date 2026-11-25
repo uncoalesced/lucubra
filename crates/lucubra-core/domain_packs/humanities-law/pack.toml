@@ -1,0 +1,17 @@
+id = "humanities-law"
+name = "Humanities and law"
+version = "1.0.0"
+keywords = ["law", "llb", "llm", "legal", "history", "literature", "humanit", "philosophy", "political", "sociology", "psychology", "anthropology"]
+effort_factor = 0.9
+formats = ["pdf", "docx", "epub", "txt", "bib", "ris"]
+exam_types = ["theory", "open_book", "objective", "viva", "project"]
+
+[[questions]]
+id = "pack_citation_style"
+prompt = "Which citation style do your essays use?"
+example = "OSCOLA"
+
+[[questions]]
+id = "pack_essay_length"
+prompt = "How long are your exam essays?"
+example = "about 1,500 words in 90 minutes"

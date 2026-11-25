@@ -1,0 +1,72 @@
+# Item and rubric templates. {placeholders} are filled by the host from your material;
+# every generated item still passes the grounding check.
+
+[[templates]]
+id = "hum-essay"
+type = "long_answer"
+exam_type = "theory"
+prompt = "Discuss the argument at {location}, with evidence for and against."
+
+[[templates.rubric]]
+criterion = "Clear thesis"
+max_points = 2
+
+[[templates.rubric]]
+criterion = "Use of sources"
+max_points = 3
+
+[[templates.rubric]]
+criterion = "Counter-argument"
+max_points = 2
+
+[[templates.rubric]]
+criterion = "Structure"
+max_points = 1
+
+[[templates]]
+id = "law-problem"
+type = "long_answer"
+exam_type = "open_book"
+prompt = "Advise the party in this problem using the authority at {location}: {case}."
+
+[[templates.rubric]]
+criterion = "Identifies the issues"
+max_points = 2
+
+[[templates.rubric]]
+criterion = "States the law"
+max_points = 3
+
+[[templates.rubric]]
+criterion = "Applies it"
+max_points = 3
+
+[[templates.rubric]]
+criterion = "Conclusion"
+max_points = 1
+
+[[templates]]
+id = "hum-quote"
+type = "short_answer"
+exam_type = "theory"
+prompt = "Explain the significance of the passage at {location}."
+
+[[templates.rubric]]
+criterion = "Context"
+max_points = 1
+
+[[templates.rubric]]
+criterion = "Interpretation"
+max_points = 2
+
+[[templates]]
+id = "hum-match"
+type = "matching"
+exam_type = "objective"
+prompt = "Match each case, author or event to its description from {location}."
+
+[[templates]]
+id = "hum-date"
+type = "ordering"
+exam_type = "objective"
+prompt = "Order the events described at {location}."

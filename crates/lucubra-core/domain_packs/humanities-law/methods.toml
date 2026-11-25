@@ -1,0 +1,4 @@
+# Exam type to session method overrides (SPEC 12.4).
+[methods]
+theory = "Plan essays from recalled arguments and sources, then write timed answers graded against rubrics"
+open_book = "Practise finding the relevant case, statute or passage quickly, then apply it to a problem question"

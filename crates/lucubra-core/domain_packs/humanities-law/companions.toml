@@ -1,0 +1,8 @@
+# MCP servers to recommend when matching files are in the workspace.
+# Lucubra only recommends them; it never installs or starts them.
+
+[[companions]]
+name = "Zotero MCP server"
+purpose = "Lets the assistant search and cite items in your Zotero library."
+detect = [".bib", ".ris"]
+search = "Zotero MCP"
