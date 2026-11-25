@@ -1,0 +1,17 @@
+id = "commerce-finance"
+name = "Commerce and finance"
+version = "1.0.0"
+keywords = ["commerce", "b.com", "bcom", "account", "finance", "tax", "mba", "business", "econom", "chartered"]
+effort_factor = 1.5
+formats = ["pdf", "xlsx", "xls", "csv", "pptx"]
+exam_types = ["theory", "numericals", "objective", "open_book", "project"]
+
+[[questions]]
+id = "pack_standards"
+prompt = "Which accounting standards does your course follow?"
+example = "Ind AS"
+
+[[questions]]
+id = "pack_calculator"
+prompt = "Which calculator is allowed in your exams?"
+example = "a basic non-programmable calculator"

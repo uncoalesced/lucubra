@@ -1,0 +1,4 @@
+# Exam type to session method overrides (SPEC 12.4).
+[methods]
+practical = "Write and trace code for lab problems, then order the steps of each algorithm and check outputs against expected results"
+viva = "Explain your lab programs and project design aloud, with follow-up questions on complexity and edge cases"

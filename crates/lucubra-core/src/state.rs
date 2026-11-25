@@ -52,6 +52,8 @@ pub mod col {
     pub const EXAM_SIMS: &str = "exam_sims";
     /// Pack-mode handoff blocks already ingested, by session id.
     pub const HANDOFFS: &str = "handoffs";
+    /// Daily wellbeing check-ins by local date `YYYY-MM-DD` (the last of a day wins).
+    pub const CHECKINS: &str = "checkins";
 }
 
 /// Event types the engine folds into state. Other known types are stored in
@@ -93,6 +95,7 @@ pub const FOLDED_TYPES: &[&str] = &[
     "exam_sim.completed",
     "pack.built",
     "handoff.ingested",
+    "checkin.logged",
 ];
 
 /// Why an event did not change state.
@@ -422,6 +425,16 @@ impl State {
             "handoff.ingested" => {
                 let sid = str_field(data, "session_id").ok_or(Skip::BadPayload("session_id"))?;
                 self.put(col::HANDOFFS, sid, data.clone());
+            }
+            "checkin.logged" => {
+                // The writer's local date wins; older events fall back to the UTC date.
+                let date = str_field(data, "date")
+                    .or_else(|| event.ts.get(..10))
+                    .filter(|d| d.len() == 10)
+                    .ok_or(Skip::BadPayload("date"))?;
+                let mut entry = fields.clone();
+                entry.insert("date".into(), Value::String(date.to_owned()));
+                self.put(col::CHECKINS, date, Value::Object(entry));
             }
             "transcript.saved" => {
                 let hash = str_field(data, "hash").ok_or(Skip::BadPayload("hash"))?;
@@ -790,6 +803,34 @@ mod tests {
         assert_eq!(
             s.apply(&event("file.tagged", json!({"hash": "h"}))),
             Err(Skip::BadPayload("assessment"))
+        );
+    }
+
+    #[test]
+    fn checkin_folds_by_local_date_and_last_wins() {
+        let mut s = State::default();
+        s.apply(&event(
+            "checkin.logged",
+            json!({"date": "2026-11-20", "sleep": 6.5, "quality": 3, "energy": 2}),
+        ))
+        .unwrap();
+        s.apply(&event(
+            "checkin.logged",
+            json!({"date": "2026-11-20", "sleep": 7.0, "quality": 4, "energy": 4}),
+        ))
+        .unwrap();
+        let day = s.get(col::CHECKINS, "2026-11-20").unwrap();
+        assert_eq!(day["sleep"], 7.0);
+        assert_eq!(day["energy"], 4);
+
+        let mut from_ts = event("checkin.logged", json!({"sleep": 5}));
+        from_ts.ts = "2026-11-21T23:10:00Z".into();
+        s.apply(&from_ts).unwrap();
+        assert_eq!(s.get(col::CHECKINS, "2026-11-21").unwrap()["sleep"], 5);
+
+        assert_eq!(
+            s.apply(&event("checkin.logged", json!({"sleep": 5}))),
+            Err(Skip::BadPayload("date"))
         );
     }
 }

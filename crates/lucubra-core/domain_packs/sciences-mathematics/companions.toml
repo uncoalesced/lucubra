@@ -1,0 +1,26 @@
+# MCP servers to recommend when matching files are in the workspace.
+# Lucubra only recommends them; it never installs or starts them.
+
+[[companions]]
+name = "Jupyter MCP server"
+purpose = "Lets the assistant run and edit cells in your notebooks."
+detect = [".ipynb"]
+search = "Jupyter MCP"
+
+[[companions]]
+name = "GeoGebra MCP server"
+purpose = "Lets the assistant build and inspect GeoGebra constructions."
+detect = [".ggb"]
+search = "GeoGebra MCP"
+
+[[companions]]
+name = "MATLAB MCP server"
+purpose = "Lets the assistant run MATLAB live scripts."
+detect = [".mlx"]
+search = "MATLAB MCP"
+
+[[companions]]
+name = "R MCP server"
+purpose = "Lets the assistant run R and R Markdown analyses."
+detect = [".rmd"]
+search = "R MCP"

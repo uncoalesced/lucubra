@@ -66,7 +66,7 @@ fn companion_rejects_without_token_host_or_origin_and_works_with_them() {
     let (r, d) = (root.path().to_owned(), data.path().to_owned());
     let handle = thread::spawn(move || {
         let ws = Workspace::open(&r, &d).unwrap();
-        server.serve_n(&ws, 11).unwrap();
+        server.serve_n(&ws, 17).unwrap();
     });
     let host = addr.to_string();
     let block = format!("text={}", form_encode(EXAMPLE));
@@ -113,10 +113,39 @@ fn companion_rejects_without_token_host_or_origin_and_works_with_them() {
     assert!(again.contains("already added"), "{again}");
     let pack = post(addr, &ok("/pack"), &host, "", "");
     assert!(pack.contains("Rebuilt"), "{pack}");
+
+    // M8-6: the dashboard and check-in routes sit behind the same gate.
+    let checkin = "sleep=7.5&quality=4&energy=3";
+    assert_eq!(status(&get(addr, "/dashboard", &host)), "403");
+    assert_eq!(
+        status(&get(addr, &ok("/dashboard"), "evil.example:80")),
+        "403"
+    );
+    assert_eq!(status(&post(addr, "/checkin", &host, "", checkin)), "403");
+    let evil = "Origin: http://evil.example\r\n";
+    assert_eq!(
+        status(&post(addr, &ok("/checkin"), &host, evil, checkin)),
+        "403"
+    );
+    let dash = get(addr, &ok("/dashboard"), &host);
+    assert_eq!(status(&dash), "200", "{dash}");
+    assert!(dash.contains("Sleep and retention") && !dash.contains("<script"));
+    let saved = post(addr, &ok("/checkin"), &host, "", checkin);
+    assert!(saved.contains("check-in is saved"), "{saved}");
     handle.join().unwrap();
 
     let ws = Workspace::open(root.path(), data.path()).unwrap();
     let state = ws.replay().unwrap().state;
     assert_eq!(state.collection(col::HANDOFFS).count(), 1);
+    // The pasted block's check-in and the one-tap check-in are stored once;
+    // the rejected check-in requests changed nothing.
+    let checkins = ws
+        .replay()
+        .unwrap()
+        .ordered
+        .iter()
+        .filter(|e| e.kind == "checkin.logged")
+        .count();
+    assert_eq!(checkins, 2);
     assert!(root.path().join("packs/PACK.md").is_file());
 }

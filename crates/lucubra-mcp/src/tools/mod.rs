@@ -149,7 +149,7 @@ pub fn build_tools() -> Vec<Tool> {
         ),
         tool_def::<session::SessionArgs>(
             "lucubra_session",
-            "Manage interactive study sessions and step logging (actions: start, step, end, resume).",
+            "Manage interactive study sessions and step logging (actions: start, step, end, resume, checkin).",
             false,
             false,
         ),
@@ -167,7 +167,7 @@ pub fn build_tools() -> Vec<Tool> {
         ),
         tool_def::<status::StatusArgs>(
             "lucubra_status",
-            "Return workspace counts, indexed file totals, logged study minutes, and retention placeholders.",
+            "Return workspace counts, indexed file totals, logged study minutes, dashboard metrics (readiness, consistency, adherence, capacity, focus span) and the sleep and retention view; detail=true adds full series.",
             true,
             true,
         ),

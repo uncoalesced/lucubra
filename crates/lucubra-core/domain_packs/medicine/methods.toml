@@ -1,0 +1,4 @@
+# Exam type to session method overrides (SPEC 12.4).
+[methods]
+osce = "Work through case stems station by station: history, examination, investigations and management, each timed to the station length"
+objective = "Timed single-best-answer drills grouped by system, then review of every wrong option"

@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // Engineered by uncoalesced
 
-//! `lucubra_status`: live workspace counts, logged minutes, and honest retention placeholders (`S28`).
+//! `lucubra_status`: live workspace counts, logged minutes, dashboard metrics and
+//! the sleep and retention view (SPEC 19, `S28`).
 
+use lucubra_core::metrics;
+use lucubra_core::planner::PlannerConfig;
+use lucubra_core::replay::Replay;
 use lucubra_core::state::col;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
@@ -18,39 +22,51 @@ pub struct StatusArgs {
     /// Optional subject slug filter.
     #[serde(default)]
     pub subject: Option<String>,
-    /// Include sleep-vs-retention placeholder section (default: true).
+    /// Include the sleep and retention view (default: true). It stays hidden
+    /// until 30 days have both a check-in and review data.
     #[serde(default)]
     pub include_sleep: Option<bool>,
+    /// Return full metric series (per-unit mastery, retention curve, 12 weeks)
+    /// for host artifacts (default: false).
+    #[serde(default)]
+    pub detail: Option<bool>,
     /// Optional completed-step checkpoints to log alongside this call.
     #[serde(default)]
     pub progress: Option<Vec<ProgressEntry>>,
 }
 
-/// Exam readiness per subject: mean practice mastery of its units, from
-/// strict items only (S27). Subjects without practice are left out.
-fn readiness(state: &lucubra_core::state::State) -> Value {
-    let today = crate::tools::practice::today_day();
-    let mut units: std::collections::BTreeSet<String> = state
-        .collection(col::UNITS)
-        .map(|(k, _)| k.clone())
-        .collect();
-    units.extend(
-        state
-            .collection(col::ITEMS)
-            .filter_map(|(_, i)| i.get("unit").and_then(Value::as_str).map(str::to_owned)),
-    );
-    let mut by_subject: std::collections::BTreeMap<String, Vec<f64>> = Default::default();
-    for unit in units {
-        if let Some(m) = lucubra_core::planner::unit_mastery(state, &unit, today) {
-            let subject = unit.split('/').next().unwrap_or_default().to_owned();
-            by_subject.entry(subject).or_default().push(m);
+/// Dashboard metrics (SPEC 19). The compact form fits the Free budget; `detail`
+/// adds the full series for host artifacts.
+fn metrics_block(replay: &Replay, today: i64, detail: bool) -> Value {
+    let cfg = PlannerConfig::default();
+    let state = &replay.state;
+    let pack = lucubra_core::domain::pack_for_state(state);
+    let mut exams = metrics::readiness_per_exam(state, today);
+    for exam in &mut exams {
+        let kind = exam["exam"]
+            .as_str()
+            .and_then(|id| state.get(col::EXAMS, id))
+            .and_then(|e| e.get("exam_type").or_else(|| e.get("type")))
+            .and_then(Value::as_str);
+        if let Some(kind) = kind {
+            exam["exam_type"] = json!(kind);
+            exam["method"] = json!(lucubra_core::domain::method_for(kind, pack));
         }
     }
-    by_subject
-        .into_iter()
-        .map(|(s, v)| (s, json!(v.iter().sum::<f64>() / v.len() as f64)))
-        .collect::<Map<String, Value>>()
-        .into()
+    let mut out = json!({
+        "exams": exams,
+        "weeks": metrics::consistency(replay, today, if detail { 12 } else { 4 }),
+        "plan_adherence": metrics::plan_adherence(replay, today)
+            .map(|(share, days)| json!({"share": share, "days": days})),
+        "capacity_minutes": metrics::capacity(&cfg, state),
+        "focus_span_minutes": metrics::focus_span(&cfg, replay),
+        "minutes_per_subject": metrics::time_per_subject(replay),
+    });
+    if detail {
+        out["mastery_per_unit"] = json!(metrics::mastery_per_unit(state, today));
+        out["retention_curve"] = json!(metrics::retention_curve(replay));
+    }
+    out
 }
 
 pub fn execute(
@@ -60,7 +76,7 @@ pub fn execute(
 ) -> std::result::Result<ToolOutcome, ToolError> {
     check_keys(
         args,
-        &["subject", "include_sleep", "progress"],
+        &["subject", "include_sleep", "detail", "progress"],
         "lucubra_status",
     )?;
     let subject_filter = opt_str(args, "subject")?;
@@ -69,6 +85,7 @@ pub fn execute(
     }
     let include_sleep =
         opt_bool(args, "include_sleep", "include_sleep must be true or false")?.unwrap_or(true);
+    let detail = opt_bool(args, "detail", "detail must be true or false")?.unwrap_or(false);
 
     let ws_status = ctx.ws.status().map_err(|e| {
         ToolError::new(
@@ -76,16 +93,13 @@ pub fn execute(
             format!("failed reading workspace status: {e}"),
         )
     })?;
-    let state = ctx
-        .ws
-        .replay()
-        .map_err(|e| {
-            ToolError::new(
-                ToolErrorCode::WorkspaceError,
-                format!("failed replaying workspace state: {e}"),
-            )
-        })?
-        .state;
+    let replay = ctx.ws.replay().map_err(|e| {
+        ToolError::new(
+            ToolErrorCode::WorkspaceError,
+            format!("failed replaying workspace state: {e}"),
+        )
+    })?;
+    let state = &replay.state;
 
     let subjects_count = state.collection(col::SUBJECTS).count();
     let units_count = state
@@ -127,17 +141,14 @@ pub fn execute(
     }
 
     let sleep_retention = if include_sleep {
-        json!({
-            "available": false,
-            "paired_days": 0,
-            "required_days": 30,
-            "message": "not enough data yet",
-        })
+        metrics::sleep_view(&replay)
     } else {
         Value::Null
     };
+    let today = crate::tools::practice::today_day();
+    let metrics = metrics_block(&replay, today, detail);
 
-    let questions = crate::tools::assessment_questions(ctx.ws, &state);
+    let questions = crate::tools::assessment_questions(ctx.ws, state);
     let next = (!questions.is_empty()).then(|| "confirm_assessment".to_owned());
     Ok(ToolOutcome {
         data: json!({
@@ -155,7 +166,14 @@ pub fn execute(
             "logged_minutes_total": logged_minutes_total,
             "host_renders_artifacts": ctx.host.profile.renders_artifacts,
             "sleep_retention": sleep_retention,
-            "readiness": readiness(&state),
+            "readiness": metrics::readiness_per_subject(state, today),
+            "metrics": metrics,
+            "domain_pack": lucubra_core::domain::pack_for_state(state).map(|p| json!({
+                "id": p.meta.id,
+                "name": p.meta.name,
+                "questions": lucubra_core::domain::pending_questions(state),
+            })),
+            "recommendations": lucubra_core::domain::recommendations(state),
             "needs_user": questions,
         }),
         next,

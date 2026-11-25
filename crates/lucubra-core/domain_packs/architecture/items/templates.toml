@@ -1,0 +1,46 @@
+# Item and rubric templates. {placeholders} are filled by the host from your material;
+# every generated item still passes the grounding check.
+
+[[templates]]
+id = "arch-precedent"
+type = "long_answer"
+exam_type = "theory"
+prompt = "Analyse the precedent building at {location}: form, structure and response to site."
+
+[[templates.rubric]]
+criterion = "Accurate description"
+max_points = 3
+
+[[templates.rubric]]
+criterion = "Analysis of design intent"
+max_points = 3
+
+[[templates.rubric]]
+criterion = "Uses correct terms"
+max_points = 1
+
+[[templates]]
+id = "arch-drawing-label"
+type = "diagram_label"
+exam_type = "practical"
+prompt = "Label the elements marked on the drawing at {location}."
+
+[[templates]]
+id = "arch-history"
+type = "mcq_single"
+exam_type = "theory"
+prompt = "Which architect, period or style matches the description at {location}?"
+
+[[templates]]
+id = "arch-jury"
+type = "viva_prompt"
+exam_type = "viva"
+prompt = "Defend the design decision about {topic} as you would at a jury."
+
+[[templates.rubric]]
+criterion = "Clear rationale"
+max_points = 3
+
+[[templates.rubric]]
+criterion = "Responds to critique"
+max_points = 2

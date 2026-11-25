@@ -1,0 +1,4 @@
+# Exam type to session method overrides (SPEC 12.4).
+[methods]
+numericals = "Prepare statements and computations in the exam layout, with each figure checked against the source"
+open_book = "Practise locating the right standard or section quickly, then apply it to a short case"

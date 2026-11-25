@@ -1,0 +1,17 @@
+id = "computer-science"
+name = "Computer science and IT"
+version = "1.0.0"
+keywords = ["computer", "software", "information technology", "cse", "bca", "mca", "data science", "artificial intelligence", "cyber"]
+effort_factor = 1.3
+formats = ["pdf", "pptx", "ipynb", "py", "java", "c", "cpp", "sql", "md"]
+exam_types = ["theory", "practical", "objective", "viva", "project"]
+
+[[questions]]
+id = "pack_lab_language"
+prompt = "Which programming language do your lab sessions use?"
+example = "Python"
+
+[[questions]]
+id = "pack_lab_exam_format"
+prompt = "Is your practical exam written on paper, typed on a lab machine, or both?"
+example = "typed on a lab machine"

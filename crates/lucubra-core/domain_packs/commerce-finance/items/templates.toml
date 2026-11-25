@@ -1,0 +1,56 @@
+# Item and rubric templates. {placeholders} are filled by the host from your material;
+# every generated item still passes the grounding check.
+
+[[templates]]
+id = "com-journal"
+type = "short_answer"
+exam_type = "numericals"
+prompt = "Write the journal entries for the transactions at {location}."
+
+[[templates.rubric]]
+criterion = "Correct accounts"
+max_points = 2
+
+[[templates.rubric]]
+criterion = "Correct amounts"
+max_points = 2
+
+[[templates.rubric]]
+criterion = "Narration"
+max_points = 1
+
+[[templates]]
+id = "com-ratio"
+type = "numeric"
+exam_type = "numericals"
+prompt = "Compute {ratio} from the figures at {location}."
+
+[[templates]]
+id = "com-cell"
+type = "numeric"
+exam_type = "numericals"
+prompt = "What value does cell {cell} in the sheet at {location} hold?"
+
+[[templates]]
+id = "com-concept"
+type = "mcq_single"
+exam_type = "objective"
+prompt = "Which treatment does {location} prescribe for {case}?"
+
+[[templates]]
+id = "com-case"
+type = "long_answer"
+exam_type = "open_book"
+prompt = "Apply the provision at {location} to this case: {case}."
+
+[[templates.rubric]]
+criterion = "Identifies the provision"
+max_points = 2
+
+[[templates.rubric]]
+criterion = "Correct application"
+max_points = 3
+
+[[templates.rubric]]
+criterion = "Conclusion"
+max_points = 1

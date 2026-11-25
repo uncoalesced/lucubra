@@ -1,0 +1,14 @@
+# MCP servers to recommend when matching files are in the workspace.
+# Lucubra only recommends them; it never installs or starts them.
+
+[[companions]]
+name = "FreeCAD MCP server"
+purpose = "Lets the assistant inspect and edit FreeCAD models."
+detect = [".fcstd", ".step", ".stp", ".iges"]
+search = "FreeCAD MCP"
+
+[[companions]]
+name = "CAD drawing MCP server"
+purpose = "Lets the assistant read and edit DWG or DXF drawings."
+detect = [".dwg", ".dxf"]
+search = "CAD MCP DXF"

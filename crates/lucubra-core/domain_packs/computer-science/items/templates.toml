@@ -1,0 +1,66 @@
+# Item and rubric templates. {placeholders} are filled by the host from your material;
+# every generated item still passes the grounding check.
+
+[[templates]]
+id = "cs-trace-output"
+type = "short_answer"
+exam_type = "practical"
+prompt = "Give the exact output of the code at {location} for the input {input}."
+
+[[templates.rubric]]
+criterion = "Correct final output"
+max_points = 2
+
+[[templates.rubric]]
+criterion = "Correct intermediate state shown"
+max_points = 1
+
+[[templates]]
+id = "cs-complexity"
+type = "mcq_single"
+exam_type = "objective"
+prompt = "What is the time complexity of the algorithm described at {location}?"
+
+[[templates]]
+id = "cs-algorithm-order"
+type = "ordering"
+exam_type = "practical"
+prompt = "Put the steps of the algorithm at {location} in the order they run."
+
+[[templates]]
+id = "cs-concept-cloze"
+type = "cloze"
+exam_type = "theory"
+prompt = "Fill in the missing term in this statement from {location}: {statement}"
+
+[[templates]]
+id = "cs-design-answer"
+type = "long_answer"
+exam_type = "theory"
+prompt = "Explain the design or protocol described at {location}, with one advantage and one limitation."
+
+[[templates.rubric]]
+criterion = "Accurate description"
+max_points = 4
+
+[[templates.rubric]]
+criterion = "Advantage and limitation correct"
+max_points = 2
+
+[[templates.rubric]]
+criterion = "Clear structure"
+max_points = 1
+
+[[templates]]
+id = "cs-viva-project"
+type = "viva_prompt"
+exam_type = "viva"
+prompt = "Explain how your program handles {case}, as you would to an examiner."
+
+[[templates.rubric]]
+criterion = "Correct explanation"
+max_points = 3
+
+[[templates.rubric]]
+criterion = "Handles follow-up on edge cases"
+max_points = 2

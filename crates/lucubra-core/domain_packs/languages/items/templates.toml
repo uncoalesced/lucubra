@@ -1,0 +1,46 @@
+# Item and rubric templates. {placeholders} are filled by the host from your material;
+# every generated item still passes the grounding check.
+
+[[templates]]
+id = "lang-vocab"
+type = "cloze"
+exam_type = "objective"
+prompt = "Fill in the missing word from your list at {location}: {sentence}"
+
+[[templates]]
+id = "lang-match"
+type = "matching"
+exam_type = "objective"
+prompt = "Match each word from {location} to its meaning."
+
+[[templates]]
+id = "lang-translate"
+type = "short_answer"
+exam_type = "theory"
+prompt = "Translate the sentence at {location}."
+
+[[templates.rubric]]
+criterion = "Meaning preserved"
+max_points = 2
+
+[[templates.rubric]]
+criterion = "Grammar correct"
+max_points = 2
+
+[[templates]]
+id = "lang-speak"
+type = "viva_prompt"
+exam_type = "viva"
+prompt = "Answer aloud in the target language: {question}"
+
+[[templates.rubric]]
+criterion = "Fluency"
+max_points = 2
+
+[[templates.rubric]]
+criterion = "Accuracy"
+max_points = 2
+
+[[templates.rubric]]
+criterion = "Range of vocabulary"
+max_points = 1

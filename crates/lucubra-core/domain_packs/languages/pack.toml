@@ -1,0 +1,17 @@
+id = "languages"
+name = "Languages"
+version = "1.0.0"
+keywords = ["english", "language", "linguistic", "french", "german", "spanish", "japanese", "chinese", "mandarin", "hindi", "kannada", "sanskrit", "arabic"]
+effort_factor = 0.9
+formats = ["pdf", "txt", "md", "csv", "vtt", "srt", "mp3"]
+exam_types = ["theory", "objective", "viva", "open_book"]
+
+[[questions]]
+id = "pack_target_level"
+prompt = "Which level are you aiming for?"
+example = "CEFR B2"
+
+[[questions]]
+id = "pack_native_language"
+prompt = "Which language should explanations use?"
+example = "English"

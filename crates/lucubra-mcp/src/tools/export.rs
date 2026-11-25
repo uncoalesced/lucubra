@@ -328,11 +328,28 @@ pub fn execute(
                 active_session_override: None,
             })
         }
-        "dashboard" => Err(ToolError::new(
-            ToolErrorCode::NotImplemented,
-            "Self-contained HTML dashboard export is implemented in milestone M8.",
-        )
-        .with_detail(ctx.host.profile.export_recipe)),
+        "dashboard" => {
+            lucubra_core::dashboard::write(ctx.ws, crate::tools::practice::today_day()).map_err(
+                |e| {
+                    ToolError::new(
+                        ToolErrorCode::WorkspaceError,
+                        format!("dashboard build failed: {e}"),
+                    )
+                },
+            )?;
+            Ok(ToolOutcome {
+                data: json!({
+                    "file": lucubra_core::dashboard::PATH,
+                    "self_contained": true,
+                    "delivery": "Open dashboard/index.html in a browser. It makes no network request. The same page is at /dashboard on the companion page from lucubra serve.",
+                }),
+                next: None,
+                warnings: Vec::new(),
+                per_call_limit: limits.response_limit,
+                suppress_wrap_up: false,
+                active_session_override: None,
+            })
+        }
         _ => unreachable!(),
     }
 }

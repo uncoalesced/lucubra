@@ -1,0 +1,17 @@
+id = "medicine"
+name = "Medicine"
+version = "1.0.0"
+keywords = ["medic", "mbbs", "nursing", "pharma", "dental", "bds", "physiotherapy", "paramedic"]
+effort_factor = 1.3
+formats = ["pdf", "pptx", "jpg", "png", "dcm"]
+exam_types = ["theory", "objective", "osce", "viva", "practical"]
+
+[[questions]]
+id = "pack_osce_stations"
+prompt = "How many OSCE stations does your next clinical exam have, and how long is each?"
+example = "12 stations of 8 minutes"
+
+[[questions]]
+id = "pack_clinical_posting"
+prompt = "Which clinical posting are you in now?"
+example = "General medicine"

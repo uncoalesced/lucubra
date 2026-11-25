@@ -1,0 +1,4 @@
+# Exam type to session method overrides (SPEC 12.4).
+[methods]
+viva = "Spoken-style conversation practice on set topics, with corrections after each answer"
+objective = "Timed vocabulary and grammar drills from your word lists"

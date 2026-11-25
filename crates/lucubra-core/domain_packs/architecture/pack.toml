@@ -1,0 +1,17 @@
+id = "architecture"
+name = "Architecture"
+version = "1.0.0"
+keywords = ["architect", "b.arch", "barch", "urban design", "interior design"]
+effort_factor = 1.2
+formats = ["pdf", "jpg", "png", "dwg", "dxf", "skp", "blend", "ifc", "3dm"]
+exam_types = ["theory", "project", "viva", "practical"]
+
+[[questions]]
+id = "pack_design_tools"
+prompt = "Which design software do you use for studio work?"
+example = "SketchUp and Blender"
+
+[[questions]]
+id = "pack_jury_date"
+prompt = "When is your next design jury or portfolio review?"
+example = "2026-12-15"

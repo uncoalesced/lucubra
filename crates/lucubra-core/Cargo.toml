@@ -17,6 +17,7 @@ directories.workspace = true
 unicode-normalization.workspace = true
 fsrs.workspace = true
 zip.workspace = true
+toml.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

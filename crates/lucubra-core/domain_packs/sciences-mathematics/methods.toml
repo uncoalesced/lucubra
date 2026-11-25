@@ -1,0 +1,4 @@
+# Exam type to session method overrides (SPEC 12.4).
+[methods]
+numericals = "Solve problems step by step with units and significant figures, graded with tolerance"
+theory = "Active recall of definitions and theorems, then proofs or derivations graded against rubrics"
