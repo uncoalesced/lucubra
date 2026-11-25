@@ -138,25 +138,7 @@ fn validate_string_array(
     Ok(Some(out))
 }
 
-/// Item types the engine stores (SPEC section 13.1).
-const ITEM_TYPES: &[&str] = &[
-    "mcq_single",
-    "mcq_multi",
-    "cloze",
-    "true_false",
-    "matching",
-    "numeric",
-    "ordering",
-    "short_answer",
-    "long_answer",
-    "viva_prompt",
-    "case_stem",
-    "diagram_label",
-    "formula_recall",
-];
-
-/// Open types the host grades against a stored rubric.
-const RUBRIC_TYPES: &[&str] = &["short_answer", "long_answer", "viva_prompt", "case_stem"];
+use lucubra_core::domain::{ITEM_TYPES, RUBRIC_TYPES};
 
 fn grounding_failed(msg: impl Into<String>) -> ToolError {
     ToolError::new(ToolErrorCode::GroundingFailed, msg)
