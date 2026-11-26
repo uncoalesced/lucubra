@@ -68,7 +68,17 @@ enum Command {
     },
     /// Check external tools (Python worker, ODA/LibreDWG, Blender) and retry
     /// pending files in the workspace when a tool is found.
-    Doctor(Target),
+    Doctor {
+        #[command(flatten)]
+        target: Target,
+        /// Write a redacted diagnostic file (versions, host profile, error
+        /// codes; no content) to attach to a GitHub issue.
+        #[arg(long)]
+        report: bool,
+        /// Add file names to the report.
+        #[arg(long, requires = "report")]
+        include_names: bool,
+    },
     /// Save an unverified (or verified) transcript for a vision page or image.
     Transcript {
         #[command(flatten)]
@@ -223,6 +233,25 @@ fn run_extract(
     Ok(())
 }
 
+fn write_report(
+    ws: &Workspace,
+    status: &lucubra_ingest::doctor::ToolStatus,
+    include_names: bool,
+) -> lucubra_core::Result<()> {
+    let text = lucubra_ingest::doctor::report(status, Some(&ws.replay()?), include_names);
+    let dir = ws.root().join(".lucubra").join("reports");
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| lucubra_core::Error::io(format!("creating {}", dir.display()), e))?;
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let path = dir.join(format!("doctor-{secs}.txt"));
+    std::fs::write(&path, &text)
+        .map_err(|e| lucubra_core::Error::io(format!("writing {}", path.display()), e))?;
+    println!("report written: {}", path.display());
+    Ok(())
+}
+
 fn confirm_reset() -> bool {
     print!("Reset clears the state cache and unedited generated files. Type 'reset' to continue: ");
     let _ = std::io::stdout().flush();
@@ -302,7 +331,11 @@ fn run(command: Command) -> lucubra_core::Result<()> {
                 classified.batch.len()
             );
         }
-        Command::Doctor(target) => {
+        Command::Doctor {
+            target,
+            report,
+            include_names,
+        } => {
             let status = lucubra_ingest::doctor::check_tools();
             for tool in status.all() {
                 if let Some(path) = &tool.path {
@@ -316,7 +349,12 @@ fn run(command: Command) -> lucubra_core::Result<()> {
             let ws_root = workspace_path(&target);
             if target.workspace.is_some() || ws_root.join(".lucubra").join("VERSION").is_file() {
                 let ws = Workspace::open(&ws_root, &data_dir)?;
-                run_extract(&ws, status)?;
+                run_extract(&ws, status.clone())?;
+                if report {
+                    write_report(&ws, &status, include_names)?;
+                }
+            } else if report {
+                print!("{}", lucubra_ingest::doctor::report(&status, None, false));
             }
         }
         Command::Transcript {
