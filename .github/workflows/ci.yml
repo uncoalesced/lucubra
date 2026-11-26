@@ -22,6 +22,19 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
 
+  crate-isolation:
+    # Each crate's suite on its own, so workspace feature unification cannot
+    # hide a missing dev-dependency or feature.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [lucubra-core, lucubra-ingest, lucubra-mcp, lucubra-pack, lucubra-companion, lucubra-cli]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test -p ${{ matrix.crate }}
+
   deny:
     runs-on: ubuntu-latest
     steps:
