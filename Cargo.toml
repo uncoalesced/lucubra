@@ -27,7 +27,7 @@ proptest = "1"
 csv = "1"
 unicode-normalization = "0.1"
 fsrs = "7"
-toml = { version = "0.9", default-features = false, features = ["parse", "serde", "std"] }
+toml = { version = "1.2", default-features = false, features = ["parse", "serde", "std"] }
 calamine = "0.38"
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 quick-xml = "0.42"
