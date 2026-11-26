@@ -111,6 +111,50 @@ jobs:
           path: dist/*.whl
           if-no-files-found: error
 
+  install-check:
+    # Clean install from the built wheel through the install scripts, then the
+    # smoke test: version, init, doctor, 11 MCP tools and the embedded domain packs.
+    needs: [check, wheels]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            wheel: wheel-windows-x86_64
+          - os: macos-latest
+            wheel: wheel-macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.wheel }}
+          path: wheel
+      - name: Wheel file URL
+        id: wheel
+        shell: bash
+        run: |
+          uri="$(uv run --no-project --python 3.11 python -c "import pathlib,sys;print(next(pathlib.Path('wheel').glob('*.whl')).resolve().as_uri())")"
+          echo "uri=$uri" >> "$GITHUB_OUTPUT"
+      - name: Install with install.ps1
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./packaging/install.ps1 -WheelUrl "${{ steps.wheel.outputs.uri }}"
+      - name: Install with install.sh
+        if: runner.os != 'Windows'
+        shell: bash
+        run: sh packaging/install.sh --wheel-url "${{ steps.wheel.outputs.uri }}"
+      - name: Smoke test the installed tool
+        shell: bash
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          bin="$(uv tool dir --bin)"
+          if command -v cygpath >/dev/null 2>&1; then bin="$(cygpath -u "$bin")"; fi
+          export PATH="$bin:$PATH"
+          uv run --no-project --python 3.11 python scripts/smoke_install.py --expect-version "$VERSION"
+
   sdist:
     needs: check
     runs-on: ubuntu-latest
@@ -186,7 +230,7 @@ jobs:
           if-no-files-found: error
 
   checksums:
-    needs: [wheels, sdist, mcpb]
+    needs: [wheels, sdist, mcpb, install-check]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
