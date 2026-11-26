@@ -224,3 +224,46 @@ pub fn scan(ws: &Workspace) -> Result<ScanReport> {
     save_stats(&stat_path, &stats)?;
     Ok(report)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn online_only_keys_are_stable_and_distinct() {
+        let a = online_only_key("inbox/big.pdf");
+        assert_eq!(a, online_only_key("inbox/big.pdf"));
+        assert_ne!(a, online_only_key("inbox/big2.pdf"));
+        assert!(a.starts_with("online-only:") && !a.contains("big"));
+    }
+
+    #[test]
+    fn stat_cache_round_trips_and_tolerates_damage() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(STAT_CACHE);
+        assert!(load_stats(&path).is_empty(), "missing file");
+        let mut stats = BTreeMap::new();
+        stats.insert(
+            "inbox/a.md".to_owned(),
+            Stat {
+                bytes: 12,
+                mtime_ms: 1_700_000_000_000,
+                hash: "h1".into(),
+            },
+        );
+        save_stats(&path, &stats).unwrap();
+        assert_eq!(load_stats(&path), stats);
+
+        fs::write(
+            &path,
+            "{\"ok\":{\"bytes\":1,\"mtime_ms\":2,\"hash\":\"h\"},\"bad\":{\"bytes\":\"x\"}}",
+        )
+        .unwrap();
+        let loaded = load_stats(&path);
+        assert_eq!(loaded.len(), 1, "the damaged entry is dropped");
+        fs::write(&path, "not json").unwrap();
+        assert!(load_stats(&path).is_empty());
+        fs::write(&path, "[1,2]").unwrap();
+        assert!(load_stats(&path).is_empty());
+    }
+}
