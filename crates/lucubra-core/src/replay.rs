@@ -89,7 +89,8 @@ mod tests {
             ws.append("unit.created", json!({"subject": "s", "unit": unit}))
                 .unwrap();
         }
-        ws.append("file.extracted", json!({"no_hash": true})).unwrap();
+        ws.append("file.extracted", json!({"no_hash": true}))
+            .unwrap();
         let events = ws.replay().unwrap().ordered;
         (root, data, events)
     }
