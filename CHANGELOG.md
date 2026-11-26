@@ -20,6 +20,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Response budgets: per-response and per-session token limits, with a wrap-up signal when the session total passes its threshold.
 - Strict validation of tool arguments, returning a compact error envelope with a single-line fix.
 - Tier 2 helpers (ODA File Converter or LibreDWG for DWG, Blender for `.blend`), detected when installed and never bundled.
+- Onboarding and organisation: profile questions with form elicitation where the host supports it, file classification, a first-run layout for approval, file moves and undo.
+- Planner and sessions: effort and priority model, scheduler with an overcommit warning, Pomodoro-Flow blocks, session scripts and handoff files, iCal busy times (address stored outside the workspace) and a `schedule/lucubra-plan.ics` export.
+- Practice: 13 item types, a grounding check against your own notes, an engine grader for closed formats and rubric grading for open ones, FSRS review, exam simulation, tutor mode for assessment files and Anki export.
+- Pack mode and companion page: a study pack of at most four files for hosts without MCP, handoff blocks ingested from `inbox/` or pasted, and `lucubra serve` on 127.0.0.1 with a per-launch token.
+- Dashboard: weekly consistency, time per subject, mastery, retention curve, readiness per exam, plan adherence, learned capacity and focus span, in `lucubra_status`, the companion page and a static `dashboard/index.html`.
+- Daily check-in (`lucubra_session` `checkin` and the companion page), with a sleep and retention view that stays hidden until 30 days have both a check-in and review data.
+- Nine domain packs with item templates, exam method overrides, optional onboarding questions and companion MCP server recommendations. Lucubra never installs a recommended server.
+- Hermes Agent profile states the 4096-character message limit of messaging apps such as Telegram.
 - Community and policy documents: README, contributing guide, code of conduct, security policy, privacy statement, terms of use, accessibility statement and data handling policy.
 - Issue templates (bug report, feature request, host compatibility report) and a pull request template.
 
@@ -33,6 +41,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Known limitations
 
-- `lucubra_plan` and `lucubra_practice`, and some actions of `lucubra_export`, `lucubra_submit` and `lucubra_ingest`, return a not-implemented error in this build.
+- The `mock_test` action of `lucubra_export` returns a not-implemented error in this build.
 - The `fetch` action of `lucubra_ingest` is not implemented.
 - Revit (`.rvt`) and SketchUp (`.skp`) files are detected but not extracted.
