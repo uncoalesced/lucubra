@@ -144,9 +144,109 @@ pub fn check_tools() -> ToolStatus {
     }
 }
 
+/// Builds the redacted diagnostic report for `lucubra doctor --report` (A8, S59).
+///
+/// Holds versions, tool availability, the last host profile and the counts of
+/// open failure codes. It never holds extracted content or tool paths; file
+/// names appear only when `include_names` is set.
+pub fn report(
+    tools: &ToolStatus,
+    replay: Option<&lucubra_core::replay::Replay>,
+    include_names: bool,
+) -> String {
+    use lucubra_core::state::col;
+    use std::collections::BTreeMap;
+    use std::fmt::Write as _;
+
+    let mut out = String::new();
+    let _ = writeln!(out, "lucubra {}", lucubra_core::VERSION);
+    let _ = writeln!(out, "os: {} {}", env::consts::OS, env::consts::ARCH);
+    for tool in tools.all() {
+        let state = match (tool.available, tool.variant) {
+            (true, Some(v)) => format!("ok [{v}]"),
+            (true, None) => "ok".to_owned(),
+            (false, _) => "missing".to_owned(),
+        };
+        let _ = writeln!(out, "tool {}: {state}", tool.id);
+    }
+    let Some(replay) = replay else {
+        out.push_str("workspace: none\n");
+        return out;
+    };
+    let host = replay
+        .ordered
+        .iter()
+        .rev()
+        .filter(|e| e.kind == "session.started")
+        .find_map(|e| e.data.get("host").and_then(|h| h.as_str()));
+    let _ = writeln!(out, "host profile: {}", host.unwrap_or("unknown"));
+    let _ = writeln!(out, "events: {}", replay.ordered.len());
+    let _ = writeln!(out, "events skipped: {}", replay.skipped.len());
+
+    let state = &replay.state;
+    let path_of = |hash: &str| {
+        state
+            .collection(col::PATHS)
+            .find(|(_, v)| v.get("hash").and_then(|h| h.as_str()) == Some(hash))
+            .map(|(p, _)| p.clone())
+    };
+    let mut codes: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (hash, file) in state.collection(col::FILES) {
+        let status = file.get("status").and_then(|s| s.as_str()).unwrap_or("");
+        if !matches!(status, "failed" | "pending") {
+            continue;
+        }
+        let code = file
+            .get("code")
+            .and_then(|c| c.as_str())
+            .unwrap_or("unknown");
+        let entry = codes.entry(format!("{status}/{code}")).or_default();
+        entry.push(path_of(hash).unwrap_or_else(|| hash[..hash.len().min(8)].to_owned()));
+    }
+    if codes.is_empty() {
+        out.push_str("open failures: none\n");
+    }
+    for (code, files) in &codes {
+        let _ = writeln!(out, "open failures {code}: {}", files.len());
+        if include_names {
+            for name in files {
+                let _ = writeln!(out, "  {name}");
+            }
+        }
+    }
+    if !include_names {
+        out.push_str("file names: omitted (pass --include-names to add them)\n");
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn report_names_last_host_and_omits_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = tempfile::tempdir().unwrap();
+        let ws = lucubra_core::Workspace::init(dir.path(), data.path()).unwrap();
+        for host in ["claude-desktop", "cursor"] {
+            ws.append(
+                "session.started",
+                serde_json::json!({"session_id": host, "host": host}),
+            )
+            .unwrap();
+        }
+        let tools = check_tools();
+        let text = report(&tools, Some(&ws.replay().unwrap()), false);
+        assert!(text.contains("host profile: cursor"), "{text}");
+        assert!(text.contains("open failures: none"), "{text}");
+        for tool in tools.all() {
+            if let Some(path) = &tool.path {
+                assert!(!text.contains(&path.display().to_string()), "{text}");
+            }
+        }
+        assert!(report(&tools, None, false).contains("workspace: none"));
+    }
 
     #[test]
     fn tool_status_lookup_matches_known_ids() {
