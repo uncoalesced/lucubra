@@ -170,3 +170,69 @@ fn doctor_ingest_transcript_and_search_work_end_to_end() {
     assert_eq!(code, Some(0), "{err}");
     assert!(tr_search.contains("results: 1"), "{tr_search}");
 }
+
+fn doctor_report(data: &Path, ws_arg: &str, extra: &[&str]) -> String {
+    let out = Command::new(env!("CARGO_BIN_EXE_lucubra"))
+        .args(["doctor", "-w", ws_arg, "--report"])
+        .args(extra)
+        .env("LUCUBRA_DATA_DIR", data)
+        .env("PATH", "")
+        .env_remove("LUCUBRA_BLENDER_PATH")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    let path = stdout
+        .lines()
+        .find_map(|l| l.strip_prefix("report written: "))
+        .unwrap_or_else(|| panic!("no report line in {stdout}"));
+    fs::read_to_string(path.trim()).unwrap()
+}
+
+#[test]
+fn s59_doctor_report_is_redacted_unless_names_are_opted_in() {
+    let tmp = tempfile::tempdir().unwrap();
+    let ws = tmp.path().join("ws");
+    let data = tmp.path().join("data");
+    let ws_arg = ws.to_str().unwrap();
+    assert_eq!(lucubra(&data, &["init", "-w", ws_arg]).0, Some(0));
+    fs::write(
+        ws.join("inbox/zebra-quokka.md"),
+        "Quokkazebra refraction notes.\n",
+    )
+    .unwrap();
+    fs::write(
+        ws.join("inbox/gearbox-secret.blend"),
+        b"BLENDER-v300 not a real scene",
+    )
+    .unwrap();
+
+    let ingest = Command::new(env!("CARGO_BIN_EXE_lucubra"))
+        .args(["ingest", "-w", ws_arg])
+        .env("LUCUBRA_DATA_DIR", &data)
+        .env("PATH", "")
+        .env_remove("LUCUBRA_BLENDER_PATH")
+        .output()
+        .unwrap();
+    assert_eq!(ingest.status.code(), Some(0));
+
+    let report = doctor_report(&data, ws_arg, &[]);
+    assert!(
+        report.contains(&format!("lucubra {}", env!("CARGO_PKG_VERSION"))),
+        "{report}"
+    );
+    assert!(report.contains("tool blender: missing"), "{report}");
+    assert!(report.contains("host profile: unknown"), "{report}");
+    assert!(
+        report.contains("open failures pending/tool_missing: 1"),
+        "{report}"
+    );
+    assert!(report.contains("file names: omitted"), "{report}");
+    for leak in ["gearbox-secret", "zebra-quokka", "Quokkazebra", ws_arg] {
+        assert!(!report.contains(leak), "report leaks {leak}: {report}");
+    }
+
+    let named = doctor_report(&data, ws_arg, &["--include-names"]);
+    assert!(named.contains("inbox/gearbox-secret.blend"), "{named}");
+    assert!(!named.contains("Quokkazebra"), "{named}");
+}
