@@ -28,6 +28,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Daily check-in (`lucubra_session` `checkin` and the companion page), with a sleep and retention view that stays hidden until 30 days have both a check-in and review data.
 - Nine domain packs with item templates, exam method overrides, optional onboarding questions and companion MCP server recommendations. Lucubra never installs a recommended server.
 - Hermes Agent profile states the 4096-character message limit of messaging apps such as Telegram.
+- `lucubra doctor --report` writes a redacted diagnostic file (versions, tools, host profile, error codes) to attach to an issue. File names are added only with `--include-names`.
+- Clean install check on Windows and macOS in the release workflow, through the install scripts.
 - Community and policy documents: README, contributing guide, code of conduct, security policy, privacy statement, terms of use, accessibility statement and data handling policy.
 - Issue templates (bug report, feature request, host compatibility report) and a pull request template.
 
