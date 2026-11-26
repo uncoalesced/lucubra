@@ -468,3 +468,43 @@ pub fn extract_pending_with_options(
     }
     Ok(report)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_worker_reads_a_full_response() {
+        let got = from_worker(&json!({
+            "extractor": "pdf-pymupdf",
+            "meta": {"title": " Optics ", "subject": "", "pages": 3, "slides": null},
+            "chunks": [
+                {"ref": "p:1", "text": "one"},
+                {"locator": "p:2", "text": "two"},
+                {"ref": "p:3"},
+                {"text": "no locator"}
+            ],
+            "needs_vision": [2, -1, "x", 5_000_000_000_u64],
+            "units_hint": ["u1", 7],
+            "truncated": true
+        }));
+        assert_eq!(got.extractor, "pdf-pymupdf");
+        assert_eq!(got.title.as_deref(), Some("Optics"));
+        assert_eq!(got.subject, None, "blank metadata is dropped");
+        assert_eq!(got.pages, Some(3));
+        assert_eq!(got.slides, None);
+        let locs: Vec<&str> = got.chunks.iter().map(|c| c.locator.as_str()).collect();
+        assert_eq!(locs, ["p:1", "p:2"]);
+        assert_eq!(got.needs_vision, vec![2]);
+        assert_eq!(got.units_hint, vec!["u1".to_owned()]);
+        assert!(got.truncated);
+    }
+
+    #[test]
+    fn from_worker_defaults_an_empty_response() {
+        let got = from_worker(&json!({}));
+        assert_eq!(got.extractor, "lucubra-workers");
+        assert!(got.chunks.is_empty() && got.needs_vision.is_empty() && !got.truncated);
+        assert_eq!((got.title, got.pages), (None, None));
+    }
+}
