@@ -2,6 +2,14 @@
 
 This folder holds the fixture corpus for the ingestion tests. It covers the Tier 1 formats, malformed and hostile inputs, Indic scripts, Tier 2 tool stubs and a classification batch, as ADR 0011 section 7 defines. A generator script wrote every file. None comes from a real person's notes, so the corpus holds no personal data.
 
+## Licence
+
+All test data in this folder and in `crates/lucubra-mcp/tests/fixtures/` is under the MIT licence (`LICENSE` in each folder), separate from the Apache-2.0 licence of the code. The generators produce the same kind of data for the scale corpus. No fixture contains third-party content:
+- PDF fixtures name their font without embedding a font program. The Indic PDFs carry their text through a ToUnicode map, so extraction works while no font data is distributed.
+- Raster fixtures are drawn with Pillow's bundled Aileron Regular font (CC0).
+
+`tests/test_fixture_manifest.py` checks that the licence files exist, that no PDF embeds a font program, and that no generator reads a system font.
+
 ## Layout
 
 | Folder | Contents |
