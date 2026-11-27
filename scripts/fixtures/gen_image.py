@@ -14,11 +14,15 @@ import io
 import math
 import random
 import sys
-from pathlib import Path
 
 from _common import FIXTURES_ROOT, write_bytes
 
-NIRMALA_TTC = Path(r"C:\Windows\Fonts\Nirmala.ttc")
+
+def _font(size: int):
+    """Pillow's bundled Aileron Regular (CC0), so no system or third-party font is needed."""
+    from PIL import ImageFont
+
+    return ImageFont.load_default(size=size)
 
 
 def manifest_entries() -> list[dict[str, object]]:
@@ -64,7 +68,7 @@ def manifest_entries() -> list[dict[str, object]]:
 
 
 def _build_photo_notes_png() -> bytes:
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
 
     rng = random.Random(20261114)
     width, height = 760, 520
@@ -83,8 +87,8 @@ def _build_photo_notes_png() -> bytes:
         draw.line((30, line_y, width - 30, line_y), fill=(195, 210, 228), width=1)
     draw.line((88, 20, 88, height - 20), fill=(224, 165, 165), width=2)
 
-    font_title = ImageFont.truetype(str(NIRMALA_TTC), 28, index=1)
-    font_body = ImageFont.truetype(str(NIRMALA_TTC), 22, index=0)
+    font_title = _font(28)
+    font_body = _font(22)
     lines = [
         (108, 46, "Reaction Kinetics Notes", font_title),
         (108, 102, "Second-order rate law: rate = k [A]^2", font_body),
@@ -105,11 +109,11 @@ def _build_photo_notes_png() -> bytes:
 
 
 def _build_diagram_jpg() -> bytes:
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
 
     img = Image.new("RGB", (640, 400), color=(255, 255, 255))
     draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype(str(NIRMALA_TTC), 18, index=0)
+    font = _font(18)
 
     # Inclined plane triangle
     draw.polygon([(80, 320), (540, 320), (540, 120)], outline=(30, 30, 30), fill=(238, 242, 247))
@@ -133,11 +137,11 @@ def _build_diagram_jpg() -> bytes:
 
 
 def _build_sample_webp() -> bytes:
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
 
     img = Image.new("RGB", (560, 320), color=(250, 250, 252))
     draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype(str(NIRMALA_TTC), 16, index=0)
+    font = _font(16)
 
     # Axes
     draw.line((50, 270, 520, 270), fill=(40, 40, 40), width=2)
