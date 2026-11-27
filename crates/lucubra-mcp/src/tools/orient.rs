@@ -97,23 +97,24 @@ pub fn execute(
     limits: BudgetLimits,
 ) -> std::result::Result<ToolOutcome, ToolError> {
     check_keys(args, &["progress"], "lucubra_orient")?;
-    let recovered = crate::tools::session::recover_idle(ctx.ws).map_err(|e| {
+    let replay_err = |e: lucubra_core::Error| {
+        ToolError::new(
+            ToolErrorCode::WorkspaceError,
+            format!("failed to replay workspace state: {e}"),
+        )
+    };
+    // One replay serves both recovery and the response; replay again only
+    // when recovery appended events, which is rare.
+    let mut state = ctx.ws.replay().map_err(replay_err)?.state;
+    let recovered = crate::tools::session::recover_idle(ctx.ws, &state).map_err(|e| {
         ToolError::new(
             ToolErrorCode::WorkspaceError,
             format!("session recovery failed: {e}"),
         )
     })?;
-
-    let state = ctx
-        .ws
-        .replay()
-        .map_err(|e| {
-            ToolError::new(
-                ToolErrorCode::WorkspaceError,
-                format!("failed to replay workspace state: {e}"),
-            )
-        })?
-        .state;
+    if !recovered.is_empty() {
+        state = ctx.ws.replay().map_err(replay_err)?.state;
+    }
 
     let workspace_id = state
         .get(col::WORKSPACE, "id")
