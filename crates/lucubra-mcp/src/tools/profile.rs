@@ -213,7 +213,47 @@ fn validate_and_apply_field(
                 if let Some(t) = title.filter(|s| !s.is_empty()) {
                     payload["title"] = Value::String(t.to_owned());
                 }
+                if let Some(c) = item.get("credits") {
+                    let c = c
+                        .as_f64()
+                        .filter(|c| *c > 0.0 && *c <= 100.0)
+                        .ok_or_else(|| {
+                            ToolError::new(
+                                ToolErrorCode::InvalidArguments,
+                                format!("subjects[{idx}].credits must be a number above 0"),
+                            )
+                        })?;
+                    payload["credits"] = json!(c);
+                }
+                let mut requires = Vec::new();
+                if let Some(r) = item.get("requires") {
+                    let arr = r.as_array().ok_or_else(|| {
+                        ToolError::new(
+                            ToolErrorCode::InvalidArguments,
+                            format!("subjects[{idx}].requires must be an array of subject slugs"),
+                        )
+                    })?;
+                    for (j, p) in arr.iter().enumerate() {
+                        let p = p.as_str().unwrap_or("");
+                        check_slug(&format!("subjects[{idx}].requires[{j}]"), p)?;
+                        if p == slug {
+                            return Err(ToolError::new(
+                                ToolErrorCode::InvalidArguments,
+                                format!("subjects[{idx}] cannot require itself"),
+                            ));
+                        }
+                        requires.push(p.to_owned());
+                    }
+                }
                 ctx.ws.append("subject.created", payload).map_err(ws_err)?;
+                for p in requires {
+                    ctx.ws
+                        .append(
+                            "subject.prerequisite",
+                            json!({ "subject": slug, "requires": p }),
+                        )
+                        .map_err(ws_err)?;
+                }
                 slugs.push(slug.to_owned());
             }
             ctx.ws
@@ -287,9 +327,99 @@ pub fn execute(
 ) -> std::result::Result<ToolOutcome, ToolError> {
     let action = require_action(
         args,
-        &["next", "answer", "skip", "get", "set", "preference"],
+        &[
+            "next",
+            "answer",
+            "skip",
+            "get",
+            "set",
+            "preference",
+            "grading_scheme",
+            "result",
+            "target",
+        ],
     )?;
+    let bad = |m: String| ToolError::new(ToolErrorCode::InvalidArguments, m);
+    let grade_outcome = |data: Value| -> std::result::Result<ToolOutcome, ToolError> {
+        ctx.ws.project().map_err(ws_err)?;
+        let state = ctx.ws.replay().map_err(ws_err)?.state;
+        let mut data = data;
+        data["grades"] = lucubra_core::grades::summary(&state).unwrap_or(Value::Null);
+        Ok(ToolOutcome {
+            data,
+            next: None,
+            warnings: Vec::new(),
+            per_call_limit: limits.response_limit,
+            suppress_wrap_up: false,
+            active_session_override: None,
+        })
+    };
     match action {
+        "grading_scheme" => {
+            check_keys(
+                args,
+                &["action", "preset", "bands", "fail_counts", "progress"],
+                "lucubra_profile(grading_scheme)",
+            )?;
+            let mut payload = Map::new();
+            for k in ["preset", "bands", "fail_counts"] {
+                if let Some(v) = args.get(k) {
+                    payload.insert(k.into(), v.clone());
+                }
+            }
+            let payload = Value::Object(payload);
+            lucubra_core::grades::parse_scheme(&payload).map_err(bad)?;
+            ctx.ws
+                .append("grading_scheme.set", payload)
+                .map_err(ws_err)?;
+            grade_outcome(json!({ "saved": "grading_scheme" }))
+        }
+        "result" => {
+            check_keys(
+                args,
+                &["action", "subject", "term", "grade", "credits", "progress"],
+                "lucubra_profile(result)",
+            )?;
+            let fix = "provide 'subject', 'term', 'grade' and 'credits'";
+            let subject = req_str(args, "subject", fix)?;
+            check_slug("subject", subject)?;
+            let term = req_str(args, "term", fix)?.trim();
+            let grade = req_str(args, "grade", fix)?.trim();
+            let credits = args
+                .get("credits")
+                .and_then(Value::as_f64)
+                .ok_or_else(|| bad(format!("{fix}; credits must be a number")))?;
+            let state = ctx.ws.replay().map_err(ws_err)?.state;
+            lucubra_core::grades::validate_result(&state, grade, credits).map_err(bad)?;
+            ctx.ws
+                .append(
+                    "result.recorded",
+                    json!({ "subject": subject, "term": term, "grade": grade, "credits": credits }),
+                )
+                .map_err(ws_err)?;
+            grade_outcome(json!({ "saved": "result", "subject": subject, "term": term }))
+        }
+        "target" => {
+            check_keys(
+                args,
+                &["action", "cgpa", "progress"],
+                "lucubra_profile(target)",
+            )?;
+            let raw = args
+                .get("cgpa")
+                .ok_or_else(|| bad("provide 'cgpa' (null clears the target)".into()))?;
+            if !raw.is_null() {
+                let cgpa = raw
+                    .as_f64()
+                    .ok_or_else(|| bad("cgpa must be a number or null".into()))?;
+                let state = ctx.ws.replay().map_err(ws_err)?.state;
+                lucubra_core::grades::validate_target(&state, cgpa).map_err(bad)?;
+            }
+            ctx.ws
+                .append("target.set", json!({ "cgpa": raw }))
+                .map_err(ws_err)?;
+            grade_outcome(json!({ "saved": "target" }))
+        }
         "preference" => {
             check_keys(
                 args,
