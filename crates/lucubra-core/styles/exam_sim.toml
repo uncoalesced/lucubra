@@ -1,0 +1,8 @@
+id = "exam_sim"
+name = "Exam simulation"
+summary = "Timed questions with no hints, as in the exam."
+step_order = ["timed_question"]
+question_every = 0
+depth = "brief"
+advance_on = "time"
+hints = false
