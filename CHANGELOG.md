@@ -30,6 +30,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Hermes Agent profile states the 4096-character message limit of messaging apps such as Telegram.
 - `lucubra doctor --report` writes a redacted diagnostic file (versions, tools, host profile, error codes) to attach to an issue. File names are added only with `--include-names`.
 - Clean install check on Windows and macOS in the release workflow, through the install scripts.
+- Teaching styles as data: eight styles (tutor, tester, explainer, socratic, drill, viva, exam simulation, revision), each with its own step sequence. `lucubra_session` returns the active style's steps, and a change of style takes effect from the next step.
+- Study scripts: accepting a plan writes `sessions/SCRIPT_<date>_<slug>.md` for each plan day, with timed blocks and breaks, links to the unit cards, 3 to 5 recall questions per block and the answers at the end. The session handoff compares planned minutes with the minutes done.
+- Preferences: `lucubra_profile action=preference` records learning and output preferences, projected to `PREFERENCES.md` (at most 600 tokens, user edits preserved). There is no field for a condition or diagnosis.
+- Reminders, off by default: opt in per type (study blocks, review days, exam countdown) to add calendar alarms to `schedule/lucubra-plan.ics`. Review days come from the review schedule. Claude Desktop and Claude Code also get a scheduled-task recipe in `lucubra_orient`.
+- Companion page: an easier-to-read font option, using fonts already on the device.
 - Community and policy documents: README, contributing guide, code of conduct, security policy, privacy statement, terms of use, accessibility statement and data handling policy.
 - Issue templates (bug report, feature request, host compatibility report) and a pull request template.
 
