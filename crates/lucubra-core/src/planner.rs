@@ -394,6 +394,7 @@ pub fn work_items(cfg: &PlannerConfig, state: &State, today: i64, domain: &str) 
     }
     let factor = domain_factor(domain);
     let grade_weight = crate::grades::weight_multipliers(state);
+    let freq = crate::papers::topic_frequency(state);
     tokens
         .into_iter()
         .filter(|((subject, _), _)| {
@@ -419,7 +420,8 @@ pub fn work_items(cfg: &PlannerConfig, state: &State, today: i64, domain: &str) 
                 })
                 .min_by_key(|(d, _)| *d);
             let effort = effort_minutes(cfg, tok, factor, difficulty);
-            let grade_w = grade_weight.get(&subject).copied().unwrap_or(1.0);
+            let grade_w = grade_weight.get(&subject).copied().unwrap_or(1.0)
+                * crate::papers::multiplier(&freq, &format!("{subject}/{unit}"));
             WorkItem {
                 subject,
                 unit,
