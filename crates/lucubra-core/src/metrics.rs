@@ -287,6 +287,18 @@ pub fn capacity(cfg: &PlannerConfig, state: &State) -> u32 {
     learned_capacity(cfg, &done)
 }
 
+/// Steps completed per teaching style (A2), so the engine learns which style
+/// the student completes most. Steps without a style are not counted.
+pub fn style_use(replay: &Replay) -> BTreeMap<String, u64> {
+    let mut out = BTreeMap::new();
+    for e in replay.ordered.iter().filter(|e| e.kind == "step.completed") {
+        if let Some(style) = e.data.get("style").and_then(Value::as_str) {
+            *out.entry(style.to_owned()).or_default() += 1;
+        }
+    }
+    out
+}
+
 /// Learned focus span (SPEC 12.3): the median length of the last 20 steps,
 /// or the configured span before three steps exist.
 pub fn focus_span(cfg: &PlannerConfig, replay: &Replay) -> f64 {

@@ -1,0 +1,8 @@
+id = "tutor"
+name = "Tutor"
+summary = "Explain one concept, ask one or two check questions, advance only after an answer or an explicit skip, recap at the end."
+step_order = ["explain", "check", "advance", "recap"]
+question_every = 1
+depth = "standard"
+advance_on = "answer_or_skip"
+hints = true

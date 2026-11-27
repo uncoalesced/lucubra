@@ -111,8 +111,26 @@ impl Companion {
             );
         }
         let t = &self.token;
+        let out = self.route(ws, req, t);
+        if req.query("font") == Some("readable") {
+            // Readable font option (A9): a class on <body>, CSS only, no font download.
+            let html =
+                String::from_utf8_lossy(&out).replacen("<body>", "<body class=\"readable\">", 1);
+            return html.into_bytes();
+        }
+        out
+    }
+
+    fn route(&self, ws: &Workspace, req: &Request, t: &str) -> Vec<u8> {
         match (req.method.as_str(), req.path.as_str()) {
-            ("GET", "/") => page(200, "Lucubra", &status_body(ws, t)),
+            ("GET", "/") => page(
+                200,
+                "Lucubra",
+                &format!(
+                    "{}<p><a href=\"/?t={t}&amp;font=readable\">Easier-to-read font</a></p>",
+                    status_body(ws, t)
+                ),
+            ),
             ("POST", "/handoff") => {
                 let form = parse_form(&req.body);
                 let text = form
@@ -286,7 +304,8 @@ a{color:#FDFFFC}button{background:#EF2D56;color:#FDFFFC;border:0;border-radius:4
 button:focus-visible,textarea:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #FDFFFC;outline-offset:2px}\
 input{background:#262626;color:#FDFFFC;border:1px solid #888;font:inherit;padding:.25rem}\
 textarea{width:100%;min-height:12rem;background:#262626;color:#FDFFFC;border:1px solid #888;font-family:ui-monospace,monospace}\
-.card{border:1px solid #555;border-radius:6px;padding:1rem;margin:1rem 0}";
+.card{border:1px solid #555;border-radius:6px;padding:1rem;margin:1rem 0}\
+.readable,.readable h1,.readable h2{font-family:Verdana,Tahoma,'Atkinson Hyperlegible',sans-serif;letter-spacing:.05em;word-spacing:.12em;line-height:1.8}";
 
 fn page(status: u16, title: &str, body: &str) -> Vec<u8> {
     let reason = match status {
@@ -514,5 +533,29 @@ mod tests {
         assert!(!constant_eq(b"abc", b"ab"));
         assert_ne!(new_token(), new_token());
         assert_eq!(new_token().len(), 32);
+    }
+
+    #[test]
+    fn readable_font_is_a_class_and_needs_the_token() {
+        let root = tempfile::tempdir().unwrap();
+        let data = tempfile::tempdir().unwrap();
+        let ws = Workspace::init(root.path(), data.path()).unwrap();
+        let c = Companion::bind().unwrap();
+        let req = |token: &str| Request {
+            method: "GET".into(),
+            path: "/".into(),
+            query: vec![
+                ("t".into(), token.into()),
+                ("font".into(), "readable".into()),
+            ],
+            headers: vec![("host".into(), c.addr.to_string())],
+            ..Request::default()
+        };
+        let ok = String::from_utf8(c.respond(&ws, &req(&c.token.clone()))).unwrap();
+        assert!(ok.contains("<body class=\"readable\">"), "{ok}");
+        assert!(ok.contains("font=readable") && ok.contains(".readable"));
+        assert!(!ok.contains("<script") && !ok.contains("https://"));
+        let denied = String::from_utf8(c.respond(&ws, &req("wrong"))).unwrap();
+        assert!(denied.starts_with("HTTP/1.1 403"), "{denied}");
     }
 }

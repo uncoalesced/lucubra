@@ -73,6 +73,9 @@ impl HostKind {
                 renders_artifacts: true,
                 export_recipe: "Save file in workspace or attach/paste into Claude Project / Drive connector",
                 message_chars: None,
+                scheduled_tasks: Some(
+                    "Claude Desktop: ask Claude to create a scheduled task at your study time that calls lucubra_orient, then lucubra_plan(action=\"next\").",
+                ),
             },
             Self::ClaudeCode => HostProfile {
                 kind: self,
@@ -82,6 +85,9 @@ impl HostKind {
                 renders_artifacts: false,
                 export_recipe: "Save file in workspace path; share via CLI/git or Drive sync",
                 message_chars: None,
+                scheduled_tasks: Some(
+                    "Claude Code: create a scheduled task (or use /loop) at your study time that calls lucubra_orient, then lucubra_plan(action=\"next\").",
+                ),
             },
             Self::Codex => HostProfile {
                 kind: self,
@@ -91,6 +97,7 @@ impl HostKind {
                 renders_artifacts: false,
                 export_recipe: "Write to workspace path or export .ics/.apkg from packs/ or schedule/",
                 message_chars: None,
+                scheduled_tasks: None,
             },
             Self::Antigravity => HostProfile {
                 kind: self,
@@ -100,6 +107,7 @@ impl HostKind {
                 renders_artifacts: true,
                 export_recipe: "Save to workspace (packs/, schedule/, sessions/); sync via Drive or Workspace artifact",
                 message_chars: None,
+                scheduled_tasks: None,
             },
             Self::Cursor => HostProfile {
                 kind: self,
@@ -109,6 +117,7 @@ impl HostKind {
                 renders_artifacts: false,
                 export_recipe: "Save file in workspace; open or share from workspace folder",
                 message_chars: None,
+                scheduled_tasks: None,
             },
             Self::Windsurf => HostProfile {
                 kind: self,
@@ -118,6 +127,7 @@ impl HostKind {
                 renders_artifacts: false,
                 export_recipe: "Save file in workspace; open or share from workspace folder",
                 message_chars: None,
+                scheduled_tasks: None,
             },
             Self::VsCodeCopilot => HostProfile {
                 kind: self,
@@ -127,6 +137,7 @@ impl HostKind {
                 renders_artifacts: false,
                 export_recipe: "Save file in workspace; export via local filesystem",
                 message_chars: None,
+                scheduled_tasks: None,
             },
             Self::LmStudio => HostProfile {
                 kind: self,
@@ -136,6 +147,7 @@ impl HostKind {
                 renders_artifacts: false,
                 export_recipe: "Fully private local mode: keep exports on local disk only unless user copies them out",
                 message_chars: None,
+                scheduled_tasks: None,
             },
             Self::HermesAgent => HostProfile {
                 kind: self,
@@ -145,6 +157,7 @@ impl HostKind {
                 renders_artifacts: false,
                 export_recipe: "Send file path/summary through active messaging gateway or synced workspace folder",
                 message_chars: Some(4096),
+                scheduled_tasks: None,
             },
             Self::JanOrOpenWebUi => HostProfile {
                 kind: self,
@@ -154,6 +167,7 @@ impl HostKind {
                 renders_artifacts: false,
                 export_recipe: "Keep local file in workspace or copy text directly into chat",
                 message_chars: None,
+                scheduled_tasks: None,
             },
             Self::Generic => HostProfile {
                 kind: self,
@@ -163,6 +177,7 @@ impl HostKind {
                 renders_artifacts: false,
                 export_recipe: "Save file in workspace (packs/, schedule/, sessions/) and copy or upload as needed",
                 message_chars: None,
+                scheduled_tasks: None,
             },
         }
     }
@@ -186,6 +201,9 @@ pub struct HostProfile {
     /// Per-message character limit of the channel the user reads replies in,
     /// when it is a messaging app (Telegram `sendMessage`: 4096, S22).
     pub message_chars: Option<usize>,
+    /// How to set up a host scheduled task as a study reminder (A7), when the
+    /// host has scheduled tasks. Shown only after the user opts in to reminders.
+    pub scheduled_tasks: Option<&'static str>,
 }
 
 /// Runtime capabilities declared by the MCP client in `initialize`.

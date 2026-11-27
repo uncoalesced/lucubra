@@ -1,0 +1,8 @@
+id = "drill"
+name = "Drill"
+summary = "Rapid short items with immediate grading and minimal explanation."
+step_order = ["question", "grade"]
+question_every = 0
+depth = "brief"
+advance_on = "answer"
+hints = false

@@ -19,7 +19,7 @@ use crate::tools::{
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProfileArgs {
-    /// Action: next, answer, skip, get, or set.
+    /// Action: next, answer, skip, get, set, or preference.
     pub action: String,
     /// Profile field key (for answer, skip, or single-field set).
     #[serde(default)]
@@ -285,8 +285,43 @@ pub fn execute(
     ctx: &ToolContext<'_>,
     limits: BudgetLimits,
 ) -> std::result::Result<ToolOutcome, ToolError> {
-    let action = require_action(args, &["next", "answer", "skip", "get", "set"])?;
+    let action = require_action(
+        args,
+        &["next", "answer", "skip", "get", "set", "preference"],
+    )?;
     match action {
+        "preference" => {
+            check_keys(
+                args,
+                &["action", "field", "value", "progress"],
+                "lucubra_profile(preference)",
+            )?;
+            let key = req_str(
+                args,
+                "field",
+                "provide 'field' (a preference key) and 'value' (null clears it)",
+            )?;
+            let raw = args.get("value").ok_or_else(|| {
+                ToolError::new(
+                    ToolErrorCode::InvalidArguments,
+                    "provide 'value' for the preference (null clears it)",
+                )
+            })?;
+            let value = lucubra_core::preferences::validate(key, raw)
+                .map_err(|e| ToolError::new(ToolErrorCode::InvalidArguments, e))?;
+            ctx.ws
+                .append("preference.set", json!({ "key": key, "value": value }))
+                .map_err(ws_err)?;
+            ctx.ws.project().map_err(ws_err)?;
+            Ok(ToolOutcome {
+                data: json!({ "preference": key, "value": value, "file": "PREFERENCES.md" }),
+                next: None,
+                warnings: Vec::new(),
+                per_call_limit: limits.response_limit,
+                suppress_wrap_up: false,
+                active_session_override: None,
+            })
+        }
         "next" => {
             check_keys(args, &["action", "progress"], "lucubra_profile(next)")?;
             let state = ctx.ws.replay().map_err(ws_err)?.state;

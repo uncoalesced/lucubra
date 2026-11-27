@@ -132,6 +132,31 @@ pub fn recover_idle(ws: &lucubra_core::Workspace) -> lucubra_core::Result<Vec<St
     Ok(recovered)
 }
 
+/// What the engine prescribes for the active teaching style (A2): the step
+/// sequence and its rules, plus the one-question preference (A9). A style
+/// passed on a step takes over from the next step.
+fn style_guide(state: &State, explicit: Option<&str>, previous: Option<&str>) -> Value {
+    use lucubra_core::{preferences, styles};
+    let chosen = explicit
+        .or(previous)
+        .or_else(|| preferences::get(state, "teaching_style").and_then(Value::as_str))
+        .and_then(styles::style)
+        .or_else(|| styles::style(styles::DEFAULT_STYLE));
+    let Some(s) = chosen else {
+        return Value::Null;
+    };
+    json!({
+        "style": s.id,
+        "steps": s.step_order,
+        "question_every": s.question_every,
+        "depth": s.depth,
+        "advance_on": s.advance_on,
+        "hints": s.hints,
+        "style_changed": matches!((explicit, previous), (Some(e), Some(p)) if e != p),
+        "one_question_at_a_time": preferences::flag(state, "one_question_at_a_time"),
+    })
+}
+
 fn latest_active_session(state: &State) -> Option<String> {
     state
         .collection(col::SESSIONS)
@@ -279,6 +304,7 @@ pub fn execute(
                     "units": units,
                     "style": style,
                     "status": "active",
+                    "guide": style_guide(&state, style, None),
                 }),
                 next: Some("read".into()),
                 warnings: Vec::new(),
@@ -376,6 +402,9 @@ pub fn execute(
                 payload["style"] = Value::String(st.to_owned());
             }
             ctx.ws.append("step.completed", payload).map_err(ws_err)?;
+            let previous = state
+                .get(col::SESSIONS, &sid)
+                .and_then(|s| s.get("style").and_then(Value::as_str).map(str::to_owned));
 
             Ok(ToolOutcome {
                 data: json!({
@@ -385,7 +414,8 @@ pub fn execute(
                         "unit": unit,
                         "minutes": minutes,
                         "style": style,
-                    }
+                    },
+                    "guide": style_guide(&state, style, previous.as_deref()),
                 }),
                 next: None,
                 warnings: Vec::new(),

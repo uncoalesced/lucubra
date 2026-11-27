@@ -61,6 +61,7 @@ pub const KNOWN_TYPES: &[&str] = &[
     "exam_sim.completed",
     // Wellbeing
     "checkin.logged",
+    "preference.set",
     // Addendum A4 and A6
     "term.closed",
     "result.recorded",

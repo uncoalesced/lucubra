@@ -246,6 +246,24 @@ You can see it in three places:
 
 The companion page also has a daily check-in for hours slept, sleep quality and energy. You can also tell the assistant, for example "log my check-in: 7 hours, quality 4, energy 3". The sleep and retention view stays hidden until 30 days have both a check-in and review data. When it appears, it shows the number of days it is based on and states that it is an association in your data, not a cause.
 
+## Teaching styles, study scripts and preferences
+
+Lucubra has eight teaching styles: tutor, tester, explainer, socratic, drill, viva, exam simulation and revision. Each style sets the order of the steps in a session, for example explain, check, advance and recap for the tutor style. Ask the assistant for a style at the start of a session, or switch during it ("quiz me instead"). The new style applies from the next step.
+
+When you accept a plan, Lucubra writes a study script for each plan day in `sessions/`, named after the date and the first unit of the day. A script lists the timed blocks and breaks, links each unit card, gives 3 to 5 recall questions per block with checkboxes, and collects the answers at the end. At the end of a session, the handoff file compares the minutes planned in the script with the minutes done.
+
+You can record how you prefer to learn, for example "one question at a time", a block and break length, plain-language explanations, output that reads well aloud, or the language for explanations. The assistant saves these with `lucubra_profile`, and Lucubra writes them to `PREFERENCES.md` in the workspace. You may edit that file; your edits are kept in `.lucubra/preserved/` before Lucubra rewrites it.
+
+## Reminders
+
+Reminders are off until you turn them on. There are three types, each switched on separately: study blocks, review days and exam countdown. When a type is on, `schedule/lucubra-plan.ics` gets calendar alarms for it. Review days are the days your review cards fall due. Import or subscribe to the file in your calendar app to receive the alarms.
+
+In Claude Desktop and Claude Code, the assistant can also set up a scheduled task at your study time once you have turned a reminder on.
+
+## Easier-to-read font
+
+The companion page has an **Easier-to-read font** link. It uses a font already on your device, with wider letter, word and line spacing. It downloads no font.
+
 ## Domain packs
 
 Lucubra includes nine domain packs: Commerce and finance, Computer science and IT, Mechanical and civil engineering, Electronics, Architecture, Medicine, Sciences and mathematics, Humanities and law, and Languages. The pack is chosen from the programme in your profile. A pack adds:
