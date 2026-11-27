@@ -100,14 +100,16 @@ fn next_proposal(state: &State) -> Option<String> {
 
 /// Closes open sessions idle longer than the recovery window as
 /// `recovered` (SPEC section 15). Returns the recovered session ids.
-pub fn recover_idle(ws: &lucubra_core::Workspace) -> lucubra_core::Result<Vec<String>> {
+pub fn recover_idle(
+    ws: &lucubra_core::Workspace,
+    state: &lucubra_core::state::State,
+) -> lucubra_core::Result<Vec<String>> {
     use lucubra_core::calendar::parse_minutes;
     let cfg = lucubra_core::planner::PlannerConfig::default();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs() / 60) as i64;
     let idle = (cfg.recovery_idle_ms / 60_000) as i64;
-    let state = ws.replay()?.state;
     let mut recovered = Vec::new();
     for (sid, s) in state.collection(col::SESSIONS) {
         if sid == "_unattached" || s.get("status").and_then(Value::as_str) != Some("active") {
@@ -118,7 +120,7 @@ pub fn recover_idle(ws: &lucubra_core::Workspace) -> lucubra_core::Result<Vec<St
             .find_map(|k| s.get(*k).and_then(Value::as_str).and_then(parse_minutes));
         if last.is_some_and(|t| now - t > idle) {
             let mut payload = json!({"session_id": sid, "reason": "recovered"});
-            if let Some(next) = next_proposal(&state) {
+            if let Some(next) = next_proposal(state) {
                 payload["next_proposal"] = Value::String(next);
             }
             ws.append("session.ended", payload)?;
