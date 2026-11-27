@@ -72,6 +72,7 @@ impl HostKind {
                 pointer_files: &[],
                 renders_artifacts: true,
                 export_recipe: "Save file in workspace or attach/paste into Claude Project / Drive connector",
+                message_chars: None,
             },
             Self::ClaudeCode => HostProfile {
                 kind: self,
@@ -80,6 +81,7 @@ impl HostKind {
                 pointer_files: &["CLAUDE.md"],
                 renders_artifacts: false,
                 export_recipe: "Save file in workspace path; share via CLI/git or Drive sync",
+                message_chars: None,
             },
             Self::Codex => HostProfile {
                 kind: self,
@@ -88,6 +90,7 @@ impl HostKind {
                 pointer_files: &[],
                 renders_artifacts: false,
                 export_recipe: "Write to workspace path or export .ics/.apkg from packs/ or schedule/",
+                message_chars: None,
             },
             Self::Antigravity => HostProfile {
                 kind: self,
@@ -96,6 +99,7 @@ impl HostKind {
                 pointer_files: &["GEMINI.md"],
                 renders_artifacts: true,
                 export_recipe: "Save to workspace (packs/, schedule/, sessions/); sync via Drive or Workspace artifact",
+                message_chars: None,
             },
             Self::Cursor => HostProfile {
                 kind: self,
@@ -104,6 +108,7 @@ impl HostKind {
                 pointer_files: &[],
                 renders_artifacts: false,
                 export_recipe: "Save file in workspace; open or share from workspace folder",
+                message_chars: None,
             },
             Self::Windsurf => HostProfile {
                 kind: self,
@@ -112,6 +117,7 @@ impl HostKind {
                 pointer_files: &[],
                 renders_artifacts: false,
                 export_recipe: "Save file in workspace; open or share from workspace folder",
+                message_chars: None,
             },
             Self::VsCodeCopilot => HostProfile {
                 kind: self,
@@ -120,6 +126,7 @@ impl HostKind {
                 pointer_files: &[],
                 renders_artifacts: false,
                 export_recipe: "Save file in workspace; export via local filesystem",
+                message_chars: None,
             },
             Self::LmStudio => HostProfile {
                 kind: self,
@@ -128,6 +135,7 @@ impl HostKind {
                 pointer_files: &[],
                 renders_artifacts: false,
                 export_recipe: "Fully private local mode: keep exports on local disk only unless user copies them out",
+                message_chars: None,
             },
             Self::HermesAgent => HostProfile {
                 kind: self,
@@ -136,6 +144,7 @@ impl HostKind {
                 pointer_files: &[],
                 renders_artifacts: false,
                 export_recipe: "Send file path/summary through active messaging gateway or synced workspace folder",
+                message_chars: Some(4096),
             },
             Self::JanOrOpenWebUi => HostProfile {
                 kind: self,
@@ -144,6 +153,7 @@ impl HostKind {
                 pointer_files: &[],
                 renders_artifacts: false,
                 export_recipe: "Keep local file in workspace or copy text directly into chat",
+                message_chars: None,
             },
             Self::Generic => HostProfile {
                 kind: self,
@@ -152,6 +162,7 @@ impl HostKind {
                 pointer_files: &[],
                 renders_artifacts: false,
                 export_recipe: "Save file in workspace (packs/, schedule/, sessions/) and copy or upload as needed",
+                message_chars: None,
             },
         }
     }
@@ -172,6 +183,9 @@ pub struct HostProfile {
     pub renders_artifacts: bool,
     /// Guidance string surfaced by `lucubra_export`.
     pub export_recipe: &'static str,
+    /// Per-message character limit of the channel the user reads replies in,
+    /// when it is a messaging app (Telegram `sendMessage`: 4096, S22).
+    pub message_chars: Option<usize>,
 }
 
 /// Runtime capabilities declared by the MCP client in `initialize`.

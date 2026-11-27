@@ -225,24 +225,31 @@ pub fn execute(
     let data = loop {
         let shown: Vec<Value> = all_subjects.iter().take(cap).cloned().collect();
         let subjects_truncated = cap < total_subjects;
+        let mut host = json!({
+            "id": ctx.host.profile.id,
+            "tier": crate::budget::resolve_tier(
+                state.collections.get(col::PROFILE),
+                ctx.host.profile.id,
+                ctx.host.profile.default_tier,
+            ).as_str(),
+            "renders_artifacts": ctx.host.profile.renders_artifacts,
+            "capabilities": {
+                "elicitation_form": ctx.host.capabilities.elicitation_form,
+                "elicitation_url": ctx.host.capabilities.elicitation_url,
+                "sampling": ctx.host.capabilities.sampling,
+                "roots": ctx.host.capabilities.roots,
+            },
+        });
+        if let Some(chars) = ctx.host.profile.message_chars {
+            host["message_chars"] = json!(chars);
+            host["message_rule"] = json!(format!(
+                "Replies reach the user in a messaging app. Keep each reply under {chars} characters, one question or step at a time; split anything longer into several messages."
+            ));
+        }
         let candidate = json!({
             "instructions_version": INSTRUCTIONS_VERSION,
             "workspace_id": workspace_id,
-            "host": {
-                "id": ctx.host.profile.id,
-                "tier": crate::budget::resolve_tier(
-                    state.collections.get(col::PROFILE),
-                    ctx.host.profile.id,
-                    ctx.host.profile.default_tier,
-                ).as_str(),
-                "renders_artifacts": ctx.host.profile.renders_artifacts,
-                "capabilities": {
-                    "elicitation_form": ctx.host.capabilities.elicitation_form,
-                    "elicitation_url": ctx.host.capabilities.elicitation_url,
-                    "sampling": ctx.host.capabilities.sampling,
-                    "roots": ctx.host.capabilities.roots,
-                },
-            },
+            "host": host,
             "profile": compact_profile,
             "preferences": preferences,
             "sources_configured": sources.configured,

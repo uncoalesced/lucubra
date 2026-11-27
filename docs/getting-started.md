@@ -44,7 +44,7 @@ sh packaging/install.sh --version 1.0.0b1
 sh packaging/install.sh --wheel-url <wheel URL from the release page>
 ```
 
-The scripts were read but not run for this guide, because they install software outside the test environment. They end with `lucubra --version`, or a message that the `uv` tool folder is not on your `PATH` (run `uv tool update-shell`, then open a new terminal). They use `uv tool install`, so the Python worker issue described under option 2 applies to them as well. Read a script before you run it, as with any installer.
+`install.ps1` was run from a release wheel on Windows 11, and the release workflow runs both scripts on clean Windows and macOS machines before every release, followed by a smoke test (version, `init`, `doctor`, the 11 MCP tools and the domain packs). The scripts end with `lucubra --version`, or a message that the `uv` tool folder is not on your `PATH` (run `uv tool update-shell`, then open a new terminal). Read a script before you run it, as with any installer.
 
 ### Option 2: uv tool install
 
@@ -54,14 +54,14 @@ uv tool install --prerelease allow lucubra
 
 `uv tool install` keeps `lucubra` and its Python packages in an isolated environment and places a launcher on your path. Run `uv tool update-shell` once if the launcher folder is not on your path, then open a new terminal.
 
-Known issue in the beta build, seen on Windows: the launcher that `uv` places on your path is a copy of the executable, and Lucubra looks for its Python workers next to the executable it was started from. From the launcher it finds none, so `lucubra doctor` prints `missing  python` and `lucubra ingest` prints `worker unavailable: no Python found next to lucubra` and leaves PDF, DOCX and PPTX files waiting. Point Lucubra at the tool environment's interpreter:
+On Windows the launcher that `uv` places on your path is a copy of the executable, away from its Python workers. Lucubra looks in the `uv tool` environment when no interpreter sits next to the executable, so `lucubra doctor` should print `ok  python`. If it prints `missing  python` (for example with a custom tool folder that `UV_TOOL_DIR` does not name), point Lucubra at the tool environment's interpreter:
 
 ```powershell
 $env:LUCUBRA_PYTHON = "$(uv tool dir)\lucubra\Scripts\python.exe"      # Windows
 export LUCUBRA_PYTHON="$(uv tool dir)/lucubra/bin/python"              # macOS, Linux (not verified)
 ```
 
-Set the same variable in the `env` block of every host configuration (see [troubleshooting](troubleshooting.md#python-worker-not-found)). Running the executable inside the tool environment directly, `$(uv tool dir)\lucubra\Scripts\lucubra.exe`, also works because the interpreter sits beside it.
+Set the same variable in the `env` block of every host configuration (see [troubleshooting](troubleshooting.md#python-worker-not-found)).
 
 ### Option 3: pip
 
@@ -233,6 +233,37 @@ The server exposes five prompts. Where a host shows MCP prompts (usually behind 
 The assistant should call `lucubra_orient` first in every conversation. That call reports how many files are extracted, how many still need the host to read page images, your profile, and the next suggested step. On a fresh workspace it returns `"next":"onboard"`.
 
 Study material returned by Lucubra is sent to the AI host's provider as part of the conversation. Do not connect a workspace that holds files you are not willing to share with that provider.
+
+## Dashboard and daily check-in
+
+Lucubra keeps a dashboard of your study data: sessions and minutes per week against the plan, time per subject, mastery per unit, a retention curve, readiness per exam (coverage times mastery, from items grounded in your own notes), plan adherence, your learned daily capacity and your focus span.
+
+You can see it in three places:
+
+- `dashboard/index.html` in the workspace, rebuilt at the end of every session. It is a single file with no scripts that makes no network request, so you can open it in any browser.
+- The companion page. Run `lucubra serve -w <workspace>` and open the printed address, then choose **Open the dashboard**.
+- Through your assistant, which reads the same numbers from `lucubra_status` and can draw its own charts.
+
+The companion page also has a daily check-in for hours slept, sleep quality and energy. You can also tell the assistant, for example "log my check-in: 7 hours, quality 4, energy 3". The sleep and retention view stays hidden until 30 days have both a check-in and review data. When it appears, it shows the number of days it is based on and states that it is an association in your data, not a cause.
+
+## Domain packs
+
+Lucubra includes nine domain packs: Commerce and finance, Computer science and IT, Mechanical and civil engineering, Electronics, Architecture, Medicine, Sciences and mathematics, Humanities and law, and Languages. The pack is chosen from the programme in your profile. A pack adds:
+
+- Item templates suited to the discipline.
+- Study methods for its exam types, for example OSCE stations in Medicine or design juries in Architecture.
+- One or two optional onboarding questions, which the assistant may ask when they become relevant.
+- Recommended MCP servers for operating domain software.
+
+When the workspace holds files such as `.blend`, `.kicad_pcb` or `.ipynb`, `lucubra_status` names an MCP server that would let your assistant work in that software. Lucubra only recommends these servers. It never installs or starts one, and it does not operate the software itself. To use a recommended server, add it to your host yourself.
+
+## Using Lucubra from a phone
+
+A computer is needed once to install Lucubra and build the study pack, and again whenever the pack should be rebuilt. Build the pack with the assistant (`lucubra_export` with `action` `pack`) or with **Rebuild the pack** on the companion page. The files appear in `packs/`.
+
+From a phone, study with the pack in any assistant app: add `packs/` to a Claude project or skill, a ChatGPT project, or a Gemini Gem picked from Google Drive. At the end of a session the assistant writes a handoff block. Save that block as a `.md` or `.txt` file in the workspace `inbox/` folder through a synced drive. Lucubra ingests it the next time it runs on the computer.
+
+With Hermes Agent running on the computer, a phone can also reach the full engine over Hermes's messaging gateway (Telegram, WhatsApp and others). Lucubra tells the assistant the per-message limit of 4096 characters, and the responses of a typical session fit in one message each. See [Hermes Agent](hosts/hermes-agent.md).
 
 ## Where data lives
 

@@ -263,6 +263,7 @@ pub fn execute(
             let mut payload = json!({
                 "session_id": new_sid,
                 "units": units,
+                "host": ctx.host.profile.id,
             });
             if let Some(pid) = plan_id {
                 payload["plan_id"] = Value::String(pid.to_owned());
