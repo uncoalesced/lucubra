@@ -393,8 +393,14 @@ pub fn work_items(cfg: &PlannerConfig, state: &State, today: i64, domain: &str) 
         }
     }
     let factor = domain_factor(domain);
+    let grade_weight = crate::grades::weight_multipliers(state);
     tokens
         .into_iter()
+        .filter(|((subject, _), _)| {
+            state
+                .get(col::SUBJECTS, subject)
+                .is_none_or(crate::grades::is_active)
+        })
         .map(|((subject, unit), tok)| {
             let unit_data = state.get(col::UNITS, &format!("{subject}/{unit}"));
             let num = |k: &str| unit_data.and_then(|u| u.get(k)).and_then(Value::as_f64);
@@ -413,11 +419,12 @@ pub fn work_items(cfg: &PlannerConfig, state: &State, today: i64, domain: &str) 
                 })
                 .min_by_key(|(d, _)| *d);
             let effort = effort_minutes(cfg, tok, factor, difficulty);
+            let grade_w = grade_weight.get(&subject).copied().unwrap_or(1.0);
             WorkItem {
                 subject,
                 unit,
                 exam_day: exam.map(|(d, _)| (d - today) as u32),
-                weight: exam.map_or(1.0, |(_, w)| w),
+                weight: exam.map_or(1.0, |(_, w)| w) * grade_w,
                 remaining: ((1.0 - mastery) * f64::from(effort)).round() as u32,
                 mastery,
                 difficulty: ((difficulty - 0.7) / 0.8).clamp(0.0, 1.0),

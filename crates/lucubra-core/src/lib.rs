@@ -12,6 +12,7 @@ pub mod domain;
 pub mod error;
 pub mod event;
 pub mod grader;
+pub mod grades;
 pub mod grounding;
 pub mod hlc;
 pub mod log;

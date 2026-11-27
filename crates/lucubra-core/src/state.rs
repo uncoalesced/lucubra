@@ -56,6 +56,12 @@ pub mod col {
     pub const CHECKINS: &str = "checkins";
     /// Learning and output preferences by key (`PREFERENCES.md`, A9).
     pub const PREFERENCES: &str = "preferences";
+    /// Grading scheme and CGPA target: keys `scheme` and `target` (A4).
+    pub const GRADING: &str = "grading";
+    /// Recorded results by `<term>/<subject>`, with a fold `order`.
+    pub const RESULTS: &str = "results";
+    /// Closed terms by term label: the `term.closed` payload.
+    pub const TERMS: &str = "terms";
 }
 
 /// Event types the engine folds into state. Other known types are stored in
@@ -99,6 +105,11 @@ pub const FOLDED_TYPES: &[&str] = &[
     "handoff.ingested",
     "checkin.logged",
     "preference.set",
+    "grading_scheme.set",
+    "result.recorded",
+    "target.set",
+    "term.closed",
+    "subject.prerequisite",
 ];
 
 /// Why an event did not change state.
@@ -444,6 +455,118 @@ impl State {
                 let value = data.get("value").ok_or(Skip::BadPayload("value"))?;
                 self.put(col::PREFERENCES, key, value.clone());
             }
+            "grading_scheme.set" => {
+                self.put(col::GRADING, "scheme", data.clone());
+            }
+            "target.set" => {
+                if data.get("cgpa").is_some_and(Value::is_null) {
+                    self.remove(col::GRADING, "target");
+                } else {
+                    data.get("cgpa")
+                        .and_then(Value::as_f64)
+                        .ok_or(Skip::BadPayload("cgpa"))?;
+                    self.put(col::GRADING, "target", data.clone());
+                }
+            }
+            "result.recorded" => {
+                let subject = str_field(data, "subject").ok_or(Skip::BadPayload("subject"))?;
+                let term = str_field(data, "term").ok_or(Skip::BadPayload("term"))?;
+                str_field(data, "grade").ok_or(Skip::BadPayload("grade"))?;
+                data.get("credits")
+                    .and_then(Value::as_f64)
+                    .ok_or(Skip::BadPayload("credits"))?;
+                let order = self
+                    .collection(col::RESULTS)
+                    .filter_map(|(_, r)| r.get("order").and_then(Value::as_u64))
+                    .max()
+                    .unwrap_or(0)
+                    + 1;
+                let mut result = fields.clone();
+                result.insert("order".into(), Value::from(order));
+                self.put(
+                    col::RESULTS,
+                    &format!("{term}/{subject}"),
+                    Value::Object(result),
+                );
+            }
+            "subject.prerequisite" => {
+                let subject = str_field(data, "subject").ok_or(Skip::BadPayload("subject"))?;
+                let requires = str_field(data, "requires").ok_or(Skip::BadPayload("requires"))?;
+                let mut list: Vec<String> = self
+                    .get(col::SUBJECTS, subject)
+                    .and_then(|s| s.get("prerequisites"))
+                    .and_then(Value::as_array)
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|v| v.as_str().map(str::to_owned))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if !list.iter().any(|r| r == requires) {
+                    list.push(requires.to_owned());
+                    list.sort();
+                }
+                let mut upd = Map::new();
+                upd.insert("slug".into(), Value::String(subject.to_owned()));
+                upd.insert("prerequisites".into(), Value::from(list));
+                self.merge(col::SUBJECTS, subject, &upd);
+            }
+            "term.closed" => {
+                let term = str_field(data, "term").ok_or(Skip::BadPayload("term"))?;
+                let day = data
+                    .get("day")
+                    .and_then(Value::as_i64)
+                    .ok_or(Skip::BadPayload("day"))?;
+                let list = |k: &str| -> Vec<String> {
+                    data.get(k)
+                        .and_then(Value::as_array)
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|v| v.as_str().map(str::to_owned))
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                };
+                let (retired, kept, carried) = (list("retired"), list("kept"), list("carried"));
+                self.put(col::TERMS, term, data.clone());
+                for s in retired.iter().chain(&kept) {
+                    let mut upd = Map::new();
+                    upd.insert("status".into(), Value::String("archived".into()));
+                    upd.insert("archived_term".into(), Value::String(term.to_owned()));
+                    self.merge(col::SUBJECTS, s, &upd);
+                }
+                for s in &carried {
+                    let mut upd = Map::new();
+                    upd.insert("carried_over_from".into(), Value::String(term.to_owned()));
+                    self.merge(col::SUBJECTS, s, &upd);
+                }
+                let of = |card: &Value, subjects: &[String]| {
+                    card.get("unit")
+                        .and_then(Value::as_str)
+                        .and_then(|u| u.split_once('/'))
+                        .is_some_and(|(s, _)| subjects.iter().any(|x| x == s))
+                };
+                let mut updates = Vec::new();
+                for (id, card) in self.collection(col::CARDS) {
+                    let Some(due) = card.get("due_day").and_then(Value::as_i64) else {
+                        continue;
+                    };
+                    let mut upd = Map::new();
+                    if of(card, &retired) {
+                        upd.insert("due_day".into(), Value::Null);
+                        upd.insert("retired_due_day".into(), Value::from(due));
+                    } else if of(card, &kept) {
+                        let slow = day + crate::grades::SLOW_REVIEW_DAYS;
+                        upd.insert("due_day".into(), Value::from(due.max(slow)));
+                    } else {
+                        continue;
+                    }
+                    updates.push((id.clone(), upd));
+                }
+                for (id, upd) in updates {
+                    self.merge(col::CARDS, &id, &upd);
+                }
+            }
             "transcript.saved" => {
                 let hash = str_field(data, "hash").ok_or(Skip::BadPayload("hash"))?;
                 let key = transcript_key(hash, data);
@@ -590,6 +713,99 @@ mod tests {
             kind: kind.into(),
             data,
         }
+    }
+
+    #[test]
+    fn grade_events_fold_and_term_close_retires_keeps_and_carries() {
+        let mut s = State::default();
+        for (kind, data) in [
+            (
+                "unit.created",
+                json!({"subject": "maths", "unit": "algebra"}),
+            ),
+            (
+                "unit.created",
+                json!({"subject": "physics", "unit": "optics"}),
+            ),
+            ("unit.created", json!({"subject": "chem", "unit": "bonds"})),
+            ("subject.updated", json!({"subject": "maths", "credits": 4})),
+            (
+                "subject.updated",
+                json!({"subject": "physics", "credits": 2}),
+            ),
+            (
+                "subject.prerequisite",
+                json!({"subject": "physics", "requires": "maths"}),
+            ),
+            (
+                "subject.prerequisite",
+                json!({"subject": "physics", "requires": "maths"}),
+            ),
+            (
+                "card.reviewed",
+                json!({"card_id": "cm", "unit": "maths/algebra", "due_day": 10}),
+            ),
+            (
+                "card.reviewed",
+                json!({"card_id": "cp", "unit": "physics/optics", "due_day": 10, "stability": 3.0}),
+            ),
+            (
+                "card.reviewed",
+                json!({"card_id": "cc", "unit": "chem/bonds", "due_day": 10}),
+            ),
+            (
+                "result.recorded",
+                json!({"subject": "physics", "term": "s1", "grade": "A", "credits": 2}),
+            ),
+            (
+                "result.recorded",
+                json!({"subject": "physics", "term": "s1", "grade": "F", "credits": 2}),
+            ),
+            ("grading_scheme.set", json!({"preset": "ten_point"})),
+            ("target.set", json!({"cgpa": 8.0})),
+        ] {
+            s.apply(&event(kind, data)).unwrap();
+        }
+        assert_eq!(
+            s.get(col::SUBJECTS, "physics").unwrap()["prerequisites"],
+            json!(["maths"])
+        );
+        // The correction to F supersedes the A for the same term.
+        assert_eq!(s.get(col::RESULTS, "s1/physics").unwrap()["grade"], "F");
+        assert_eq!(s.get(col::RESULTS, "s1/physics").unwrap()["order"], 2);
+        assert_eq!(crate::grades::target(&s), Some(8.0));
+
+        let close = crate::grades::close_payload(&s, "s1", &["chem".into()], 100).unwrap();
+        assert_eq!(close["carried"], json!(["physics"]));
+        assert_eq!(close["kept"], json!(["chem"]));
+        assert_eq!(close["retired"], json!(["maths"]));
+        s.apply(&event("term.closed", close)).unwrap();
+        assert!(crate::grades::close_payload(&s, "s1", &[], 100).is_err());
+        let maths = s.get(col::CARDS, "cm").unwrap();
+        assert!(maths.get("due_day").is_none());
+        assert_eq!(maths["retired_due_day"], 10);
+        assert_eq!(s.get(col::CARDS, "cc").unwrap()["due_day"], 130);
+        let phys = s.get(col::CARDS, "cp").unwrap();
+        assert_eq!(
+            (phys["due_day"].clone(), phys["stability"].clone()),
+            (json!(10), json!(3.0))
+        );
+        assert_eq!(s.get(col::SUBJECTS, "maths").unwrap()["status"], "archived");
+        assert_eq!(
+            s.get(col::SUBJECTS, "physics").unwrap()["carried_over_from"],
+            "s1"
+        );
+
+        // Archived subjects leave the planner; the carried subject stays with its weight.
+        let items =
+            crate::planner::work_items(&crate::planner::PlannerConfig::default(), &s, 0, "");
+        let subjects: Vec<&str> = items.iter().map(|w| w.subject.as_str()).collect();
+        assert_eq!(subjects, vec!["physics"]);
+        assert_eq!(items[0].weight, 1.5);
+
+        s.apply(&event("target.set", json!({"cgpa": null})))
+            .unwrap();
+        assert_eq!(crate::grades::target(&s), None);
     }
 
     #[test]

@@ -236,3 +236,112 @@ fn s59_doctor_report_is_redacted_unless_names_are_opted_in() {
     assert!(named.contains("inbox/gearbox-secret.blend"), "{named}");
     assert!(!named.contains("Quokkazebra"), "{named}");
 }
+
+#[test]
+fn s49_term_close_archives_carries_the_failed_subject_and_refuses_a_second_close() {
+    use serde_json::json;
+    let tmp = tempfile::tempdir().unwrap();
+    let ws = tmp.path().join("ws");
+    let data = tmp.path().join("data");
+    let ws_arg = ws.to_str().unwrap();
+    assert_eq!(lucubra(&data, &["init", "-w", ws_arg]).0, Some(0));
+    fs::write(ws.join("inbox/my-notes.md"), "Optics notes.\n").unwrap();
+    {
+        let w = lucubra_core::Workspace::open(&ws, &data).unwrap();
+        for (kind, payload) in [
+            (
+                "unit.created",
+                json!({"subject": "maths", "unit": "algebra"}),
+            ),
+            (
+                "unit.created",
+                json!({"subject": "physics", "unit": "optics"}),
+            ),
+            ("unit.created", json!({"subject": "chem", "unit": "bonds"})),
+            (
+                "item.created",
+                json!({"item_id": "p1", "unit": "physics/optics", "type": "true_false",
+                "prompt": "Light bends.", "answer": "true", "mode": "strict"}),
+            ),
+            (
+                "card.reviewed",
+                json!({"card_id": "cp", "unit": "physics/optics", "due_day": 5}),
+            ),
+            (
+                "card.reviewed",
+                json!({"card_id": "cm", "unit": "maths/algebra", "due_day": 5}),
+            ),
+            (
+                "result.recorded",
+                json!({"subject": "physics", "term": "Semester 5", "grade": "F", "credits": 4}),
+            ),
+            (
+                "result.recorded",
+                json!({"subject": "maths", "term": "Semester 5", "grade": "A", "credits": 4}),
+            ),
+        ] {
+            w.append(kind, payload).unwrap();
+        }
+        w.project().unwrap();
+    }
+
+    let (code, out, err) = lucubra(
+        &data,
+        &[
+            "term",
+            "close",
+            "-w",
+            ws_arg,
+            "--term",
+            "Semester 5",
+            "--keep",
+            "chem",
+        ],
+    );
+    assert_eq!(code, Some(0), "{err}");
+    assert!(out.contains("carried over: physics"), "{out}");
+    assert!(out.contains("kept on a slow schedule: chem"), "{out}");
+    assert!(out.contains("retired: maths"), "{out}");
+    assert!(ws.join("archive/semester-5/AGENTS.md").is_file());
+    assert!(
+        ws.join("archive/semester-5/subjects/physics/optics/UNIT.md")
+            .is_file()
+    );
+    // The user's own files are not moved.
+    assert!(ws.join("inbox/my-notes.md").is_file());
+    assert!(!ws.join("archive/semester-5/inbox").exists());
+
+    let state = lucubra_core::Workspace::open(&ws, &data)
+        .unwrap()
+        .replay()
+        .unwrap()
+        .state;
+    use lucubra_core::state::col;
+    assert!(state.get(col::ITEMS, "p1").is_some(), "items carry over");
+    assert_eq!(state.get(col::CARDS, "cp").unwrap()["due_day"], 5);
+    assert!(
+        state
+            .get(col::CARDS, "cm")
+            .unwrap()
+            .get("due_day")
+            .is_none()
+    );
+    let physics = fs::read_to_string(ws.join("subjects/physics/agents_physics.md")).unwrap();
+    assert!(
+        physics.contains("Carried over from Semester 5."),
+        "{physics}"
+    );
+
+    let (code, _, err) = lucubra(
+        &data,
+        &["term", "close", "-w", ws_arg, "--term", "Semester 5"],
+    );
+    assert_ne!(code, Some(0));
+    assert!(err.contains("already closed"), "{err}");
+    let (code, _, err) = lucubra(&data, &["term", "close", "-w", ws_arg, "--term", "../x"]);
+    assert_ne!(code, Some(0), "{err}");
+
+    // archive/ is never scanned back in.
+    let (_, scan, _) = lucubra(&data, &["scan", "-w", ws_arg]);
+    assert!(!scan.contains("archive/"), "{scan}");
+}
