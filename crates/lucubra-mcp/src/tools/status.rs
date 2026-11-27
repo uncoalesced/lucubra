@@ -61,6 +61,7 @@ fn metrics_block(replay: &Replay, today: i64, detail: bool) -> Value {
         "capacity_minutes": metrics::capacity(&cfg, state),
         "focus_span_minutes": metrics::focus_span(&cfg, replay),
         "minutes_per_subject": metrics::time_per_subject(replay),
+        "steps_per_style": metrics::style_use(replay),
     });
     if detail {
         out["mastery_per_unit"] = json!(metrics::mastery_per_unit(state, today));
