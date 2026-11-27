@@ -49,15 +49,18 @@ pub fn is_slug(s: &str) -> bool {
 
 /// Whether `rel` has the shape of a projection path: `AGENTS.md`,
 /// `subjects/<s>/agents_<s>.md`, `subjects/<s>/<u>/UNIT.md`,
-/// `sessions/SESSION_*.md` or `schedule/lucubra-plan.ics`.
+/// `sessions/SESSION_*.md`, `sessions/SCRIPT_*.md`, `PREFERENCES.md` or
+/// `schedule/lucubra-plan.ics`.
 pub fn is_projection_path(rel: &str) -> bool {
     let parts: Vec<&str> = rel.split('/').collect();
     match parts.as_slice() {
-        ["AGENTS.md"] => true,
+        ["AGENTS.md"] | ["PREFERENCES.md"] => true,
         ["subjects", s, file] => is_slug(s) && *file == format!("agents_{s}.md"),
         ["subjects", s, u, "UNIT.md"] => is_slug(s) && is_slug(u),
         ["schedule", "lucubra-plan.ics"] => true,
-        ["sessions", f] => f.starts_with("SESSION_") && f.ends_with(".md"),
+        ["sessions", f] => {
+            (f.starts_with("SESSION_") || f.starts_with("SCRIPT_")) && f.ends_with(".md")
+        }
         _ => false,
     }
 }
@@ -303,10 +306,7 @@ fn render_unit(state: &State, slug: &str, unit: &str, data: &Value) -> String {
     out
 }
 
-/// Session handoff path: `sessions/SESSION_<date>_<HHMM>_<slug>.md` (UTC).
-pub fn session_handoff_path(started_ts: &str, slug: &str) -> Option<String> {
-    let date = started_ts.get(..10)?;
-    let hhmm = format!("{}{}", started_ts.get(11..13)?, started_ts.get(14..16)?);
+fn file_slug(slug: &str) -> String {
     let slug: String = slug
         .chars()
         .map(|c| {
@@ -321,12 +321,21 @@ pub fn session_handoff_path(started_ts: &str, slug: &str) -> Option<String> {
         .chars()
         .take(40)
         .collect();
-    let slug = if slug.is_empty() {
+    if slug.is_empty() {
         "study".into()
     } else {
         slug
-    };
-    Some(format!("sessions/SESSION_{date}_{hhmm}_{slug}.md"))
+    }
+}
+
+/// Session handoff path: `sessions/SESSION_<date>_<HHMM>_<slug>.md` (UTC).
+pub fn session_handoff_path(started_ts: &str, slug: &str) -> Option<String> {
+    let date = started_ts.get(..10)?;
+    let hhmm = format!("{}{}", started_ts.get(11..13)?, started_ts.get(14..16)?);
+    Some(format!(
+        "sessions/SESSION_{date}_{hhmm}_{}.md",
+        file_slug(slug)
+    ))
 }
 
 /// Handoff file path for an ended session, or `None` while it is open.
@@ -340,7 +349,7 @@ pub fn session_file(session: &Value) -> Option<String> {
     session_handoff_path(&text(session, "started_ts")?, &slug)
 }
 
-fn render_session(data: &Value) -> String {
+fn render_session(state: &State, data: &Value) -> String {
     let get = |k: &str| text(data, k);
     let num = |k: &str| data.get(k).and_then(Value::as_u64).unwrap_or(0);
     let mut out = String::from("# Study session\n\n");
@@ -364,6 +373,7 @@ fn render_session(data: &Value) -> String {
     if let Some(unit) = get("last_unit") {
         out.push_str(&format!("- Last unit worked on: {unit}\n"));
     }
+    against_script(state, data, &mut out);
     if let Some(next) = get("next_proposal") {
         out.push_str(&format!("\n## Next session\n\nStart with {next}.\n"));
     }
@@ -383,19 +393,233 @@ fn ics_text(s: &str) -> String {
         .replace(',', "\\,")
 }
 
-/// Calendar of exams and the latest accepted plan, for import into any
-/// calendar app (SPEC section 17). Study blocks start at 18:00 local time.
-fn render_ics(state: &State) -> Option<String> {
-    let plan = state
+/// One plan block placed on the clock: study blocks start at 18:00 local time
+/// and follow each other with their breaks.
+struct Timed<'a> {
+    date: String,
+    start: u32,
+    end: u32,
+    pause: u32,
+    block: &'a Value,
+}
+
+fn timed_blocks(plan: &Value) -> Vec<Timed<'_>> {
+    let mut clock: BTreeMap<String, u32> = BTreeMap::new();
+    let mut out = Vec::new();
+    let blocks = plan
+        .get("blocks")
+        .and_then(Value::as_array)
+        .map_or(&[][..], Vec::as_slice);
+    for block in blocks {
+        let (Some(date), Some(minutes)) = (
+            text(block, "date"),
+            block.get("minutes").and_then(Value::as_u64),
+        ) else {
+            continue;
+        };
+        let start = *clock.entry(date.clone()).or_insert(18 * 60);
+        let end = start + minutes as u32;
+        let pause = block
+            .get("break_after")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as u32;
+        clock.insert(date.clone(), end + pause);
+        out.push(Timed {
+            date,
+            start,
+            end,
+            pause,
+            block,
+        });
+    }
+    out
+}
+
+fn latest_accepted(state: &State) -> Option<(&String, &Value)> {
+    state
         .collection(col::PLANS)
         .filter(|(_, p)| text(p, "status").as_deref() == Some("accepted"))
         .last()
-        .map(|(id, p)| (id.clone(), p));
+}
+
+fn clock_text(m: u32) -> String {
+    format!("{:02}:{:02}", (m / 60).min(23), m % 60)
+}
+
+/// Recall questions for a unit: strict items first, then fixed prompts built
+/// from the unit card, three to five in all. Returns `(question, answer)`.
+fn recall_questions(state: &State, key: &str, title: &str) -> Vec<(String, String)> {
+    let mut qs: Vec<(String, String)> = state
+        .collection(col::ITEMS)
+        .filter(|(_, i)| text(i, "unit").as_deref() == Some(key))
+        .filter(|(_, i)| text(i, "mode").as_deref() != Some("extended"))
+        .filter_map(|(_, i)| Some((one_line(&text(i, "prompt")?), one_line(&text(i, "answer")?))))
+        .take(5)
+        .collect();
+    let fixed = [
+        (
+            format!("Explain {title} in your own words."),
+            "Compare with the unit card.",
+        ),
+        (
+            format!("Name the key ideas of {title}."),
+            "See the summary in the unit card.",
+        ),
+        (
+            format!("Where would you use {title}? Give one example."),
+            "Check the example against your notes.",
+        ),
+    ];
+    for (q, a) in fixed {
+        if qs.len() >= 3 {
+            break;
+        }
+        qs.push((q, a.to_owned()));
+    }
+    qs
+}
+
+/// Study scripts for each day of the latest accepted plan (SPEC round 4, A1):
+/// timed blocks and breaks, unit card links, recall questions with answers at
+/// the end, and checkboxes. Readable on a phone and printable.
+fn render_scripts(state: &State, rendered: &mut Rendered) {
+    let Some((plan_id, plan)) = latest_accepted(state) else {
+        return;
+    };
+    let mut days: BTreeMap<String, Vec<Timed<'_>>> = BTreeMap::new();
+    for t in timed_blocks(plan) {
+        days.entry(t.date.clone()).or_default().push(t);
+    }
+    for (date, blocks) in days {
+        let first = blocks
+            .first()
+            .and_then(|t| text(t.block, "unit"))
+            .unwrap_or_default();
+        let mut out = format!(
+            "# Study script: {date}\n\nPlan {plan_id}. Tick each box as you go. Answers to the recall questions are at the end.\n"
+        );
+        let mut answers = String::from("\n## Answers\n");
+        for (n, t) in blocks.iter().enumerate() {
+            let subject = text(t.block, "subject").unwrap_or_default();
+            let unit = text(t.block, "unit").unwrap_or_default();
+            let key = format!("{subject}/{unit}");
+            let title = one_line(
+                &state
+                    .get(col::UNITS, &key)
+                    .and_then(|u| text(u, "title"))
+                    .unwrap_or_else(|| unit.clone()),
+            );
+            out.push_str(&format!(
+                "\n## Block {}: {} to {}, {} / {title}\n\n",
+                n + 1,
+                clock_text(t.start),
+                clock_text(t.end),
+                subject_title(state, &subject),
+            ));
+            if is_slug(&subject) && is_slug(&unit) {
+                out.push_str(&format!(
+                    "Unit card: [{title}](../subjects/{subject}/{unit}/UNIT.md)\n\n"
+                ));
+            }
+            out.push_str(&format!(
+                "- [ ] Study for {} minutes\n- [ ] Answer the recall questions without notes:\n",
+                t.end - t.start
+            ));
+            answers.push_str(&format!("\nBlock {}\n\n", n + 1));
+            for (q, (question, answer)) in recall_questions(state, &key, &title)
+                .into_iter()
+                .enumerate()
+            {
+                out.push_str(&format!("  {}. {question}\n", q + 1));
+                answers.push_str(&format!("{}. {answer}\n", q + 1));
+            }
+            if t.pause > 0 {
+                out.push_str(&format!("- [ ] Break: {} minutes\n", t.pause));
+            }
+        }
+        out.push_str(&answers);
+        rendered.files.insert(
+            format!("sessions/SCRIPT_{date}_{}.md", file_slug(&first)),
+            out,
+        );
+    }
+}
+
+/// Planned minutes against done minutes per unit for the session's day.
+fn against_script(state: &State, session: &Value, out: &mut String) {
+    let plan = text(session, "plan_id")
+        .and_then(|id| state.get(col::PLANS, &id))
+        .or_else(|| latest_accepted(state).map(|(_, p)| p));
+    let (Some(plan), Some(started)) = (plan, text(session, "started_ts")) else {
+        return;
+    };
+    let day = started.get(..10).unwrap_or_default();
+    let mut planned: BTreeMap<String, u32> = BTreeMap::new();
+    for t in timed_blocks(plan).into_iter().filter(|t| t.date == day) {
+        let key = format!(
+            "{}/{}",
+            text(t.block, "subject").unwrap_or_default(),
+            text(t.block, "unit").unwrap_or_default()
+        );
+        *planned.entry(key).or_default() += t.end - t.start;
+    }
+    if planned.is_empty() {
+        return;
+    }
+    let done = session.get("unit_minutes").and_then(Value::as_object);
+    let done_of = |unit: &str| {
+        done.and_then(|d| d.get(unit))
+            .and_then(Value::as_u64)
+            .unwrap_or(0)
+    };
+    out.push_str("\n## Against the script\n\n");
+    for (unit, minutes) in &planned {
+        out.push_str(&format!(
+            "- {unit}: planned {minutes} minutes, done {}\n",
+            done_of(unit)
+        ));
+    }
+    for unit in done.into_iter().flat_map(|d| d.keys()) {
+        if !planned.contains_key(unit) {
+            out.push_str(&format!(
+                "- {unit}: not in the script, done {}\n",
+                done_of(unit)
+            ));
+        }
+    }
+}
+
+fn alarm(lines: &mut Vec<String>, trigger: &str, what: &str) {
+    lines.extend([
+        "BEGIN:VALARM".to_owned(),
+        "ACTION:DISPLAY".to_owned(),
+        format!("TRIGGER:{trigger}"),
+        format!("DESCRIPTION:{}", ics_text(what)),
+        "END:VALARM".to_owned(),
+    ]);
+}
+
+/// Calendar of exams and the latest accepted plan, for import into any
+/// calendar app (SPEC section 17). Study blocks start at 18:00 local time.
+/// Alarms appear only for the reminder types the user opted in to (A7).
+fn render_ics(state: &State) -> Option<String> {
+    use crate::preferences::flag;
+    let remind_blocks = flag(state, "reminders_study_blocks");
+    let remind_exams = flag(state, "reminders_exam_countdown");
+    let mut review_days: BTreeMap<i64, usize> = BTreeMap::new();
+    if flag(state, "reminders_review_due") {
+        for (_, card) in state.collection(col::CARDS) {
+            if let Some(day) = card.get("due_day").and_then(Value::as_i64) {
+                *review_days.entry(day).or_default() += 1;
+            }
+        }
+    }
+    let plan = latest_accepted(state).map(|(id, p)| (id.clone(), p));
     let exams: Vec<(&String, &Value)> = state
         .collection(col::EXAMS)
         .filter(|(_, e)| text(e, "date").is_some())
         .collect();
-    if plan.is_none() && exams.is_empty() {
+    if plan.is_none() && exams.is_empty() && review_days.is_empty() {
         return None;
     }
     let stamp = plan
@@ -423,46 +647,48 @@ fn render_ics(state: &State) -> Option<String> {
             format!("DTSTAMP:{stamp}"),
             format!("DTSTART;VALUE=DATE:{}", date.get(..8).unwrap_or_default()),
             format!("SUMMARY:{}", ics_text(&format!("Exam: {title}"))),
-            "END:VEVENT".to_owned(),
         ]);
+        if remind_exams {
+            alarm(&mut lines, "-P1D", &format!("Exam tomorrow: {title}"));
+        }
+        lines.push("END:VEVENT".to_owned());
+    }
+    for (day, count) in &review_days {
+        let date = crate::planner::iso_from_days(*day).replace('-', "");
+        lines.extend([
+            "BEGIN:VEVENT".to_owned(),
+            format!("UID:review-{date}@lucubra"),
+            format!("DTSTAMP:{stamp}"),
+            format!("DTSTART;VALUE=DATE:{date}"),
+            format!(
+                "SUMMARY:{}",
+                ics_text(&format!("Review due: {count} cards"))
+            ),
+        ]);
+        alarm(&mut lines, "PT9H", "Cards are due for review today");
+        lines.push("END:VEVENT".to_owned());
     }
     if let Some((plan_id, plan)) = plan {
-        let mut clock: BTreeMap<String, u32> = BTreeMap::new();
-        let blocks = plan
-            .get("blocks")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        for (n, block) in blocks.iter().enumerate() {
-            let (Some(date), Some(minutes)) = (
-                text(block, "date"),
-                block.get("minutes").and_then(Value::as_u64),
-            ) else {
-                continue;
-            };
-            let start = *clock.entry(date.clone()).or_insert(18 * 60);
-            let end = start + minutes as u32;
-            let pause = block
-                .get("break_after")
-                .and_then(Value::as_u64)
-                .unwrap_or(0) as u32;
-            clock.insert(date.clone(), end + pause);
-            let day = date.replace('-', "");
+        for (n, t) in timed_blocks(plan).into_iter().enumerate() {
+            let day = t.date.replace('-', "");
             let fmt = |m: u32| format!("{day}T{:02}{:02}00", (m / 60).min(23), m % 60);
             let what = format!(
                 "Study: {} / {}",
-                text(block, "subject").unwrap_or_default(),
-                text(block, "unit").unwrap_or_default()
+                text(t.block, "subject").unwrap_or_default(),
+                text(t.block, "unit").unwrap_or_default()
             );
             lines.extend([
                 "BEGIN:VEVENT".to_owned(),
                 format!("UID:plan-{plan_id}-{n}@lucubra"),
                 format!("DTSTAMP:{stamp}"),
-                format!("DTSTART:{}", fmt(start)),
-                format!("DTEND:{}", fmt(end)),
+                format!("DTSTART:{}", fmt(t.start)),
+                format!("DTEND:{}", fmt(t.end)),
                 format!("SUMMARY:{}", ics_text(&what)),
-                "END:VEVENT".to_owned(),
             ]);
+            if remind_blocks {
+                alarm(&mut lines, "-PT10M", &what);
+            }
+            lines.push("END:VEVENT".to_owned());
         }
     }
     lines.push("END:VCALENDAR".to_owned());
@@ -514,8 +740,12 @@ pub fn render(state: &State) -> Rendered {
     }
     for (_, session) in state.collection(col::SESSIONS) {
         if let Some(path) = session_file(session) {
-            rendered.files.insert(path, render_session(session));
+            rendered.files.insert(path, render_session(state, session));
         }
+    }
+    render_scripts(state, &mut rendered);
+    if let Some(prefs) = crate::preferences::render(state) {
+        rendered.files.insert("PREFERENCES.md".into(), prefs);
     }
     if let Some(ics) = render_ics(state) {
         rendered
