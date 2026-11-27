@@ -14,7 +14,14 @@ use lucubra_core::projection::is_projection_path;
 use lucubra_core::{Error, Result};
 
 /// Top-level folders that are never ingested.
-pub const SKIP_TOP: &[&str] = &[".lucubra", "packs", "sessions", "dashboard", "exports"];
+pub const SKIP_TOP: &[&str] = &[
+    ".lucubra",
+    "packs",
+    "sessions",
+    "dashboard",
+    "exports",
+    "archive",
+];
 
 /// Generated files outside the projection index set.
 const GENERATED: &[&str] = &["schedule/lucubra-plan.ics"];
