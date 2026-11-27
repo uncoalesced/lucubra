@@ -1,0 +1,8 @@
+id = "socratic"
+name = "Socratic"
+summary = "Guiding questions that lead to the answer; no direct statement until the student has tried."
+step_order = ["guide", "question", "hint", "reveal"]
+question_every = 1
+depth = "standard"
+advance_on = "answer"
+hints = true
