@@ -19,10 +19,12 @@ pub mod metrics;
 pub mod organise;
 pub mod paths;
 pub mod planner;
+pub mod preferences;
 pub mod projection;
 pub mod replay;
 pub mod srs;
 pub mod state;
+pub mod styles;
 pub mod workspace;
 
 pub use error::{Error, Result};
