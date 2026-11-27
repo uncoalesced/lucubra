@@ -254,6 +254,20 @@ When you accept a plan, Lucubra writes a study script for each plan day in `sess
 
 You can record how you prefer to learn, for example "one question at a time", a block and break length, plain-language explanations, output that reads well aloud, or the language for explanations. The assistant saves these with `lucubra_profile`, and Lucubra writes them to `PREFERENCES.md` in the workspace. You may edit that file; your edits are kept in `.lucubra/preserved/` before Lucubra rewrites it.
 
+## Grades, a target CGPA and closing a term
+
+Tell the assistant your institution's grading scheme (the 10-point credit-weighted scheme is the default; mark thresholds differ between universities, so you can give your own bands), the credits of each subject, and your results as they arrive. `lucubra_status` then shows your SGPA per term and your CGPA.
+
+If you give a target CGPA, Lucubra works out the grade and the minimum marks each remaining subject needs this term. If the target cannot be reached, it says so and shows the best CGPA you can still reach. While a target is set, the planner gives subjects with more credits more weight, because an improvement there moves your CGPA most.
+
+At the end of a term, run:
+
+```
+lucubra term close -w <workspace> --term "Semester 5"
+```
+
+Lucubra copies the generated files (indexes, unit cards, study scripts and the calendar file) into `archive/semester-5/` and leaves your own notes and files where they are. A subject you failed carries over to the next term with its mastery and practice items. Review cards of the other subjects retire; add `--keep <subject>` to keep a subject's cards on a slow schedule instead, for example for a cumulative exam later. A term can be closed only once.
+
 ## Reminders
 
 Reminders are off until you turn them on. There are three types, each switched on separately: study blocks, review days and exam countdown. When a type is on, `schedule/lucubra-plan.ics` gets calendar alarms for it. Review days are the days your review cards fall due. Import or subscribe to the file in your calendar app to receive the alarms.
