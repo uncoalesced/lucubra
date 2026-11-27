@@ -267,6 +267,18 @@ pub fn execute(
             "interrupted_session": interrupted_session,
             "next_proposed_session": Value::Null,
         });
+        let mut candidate = candidate;
+        let opted: Vec<&str> = ["study_blocks", "review_due", "exam_countdown"]
+            .into_iter()
+            .filter(|k| lucubra_core::preferences::flag(&state, &format!("reminders_{k}")))
+            .collect();
+        if !opted.is_empty() {
+            candidate["reminders"] = json!({
+                "opted_in": opted,
+                "calendar": "schedule/lucubra-plan.ics",
+                "scheduled_task_recipe": ctx.host.profile.scheduled_tasks,
+            });
+        }
         let s = serde_json::to_string(&candidate).unwrap_or_default();
         if estimate_tokens(&s) <= max_data_tokens {
             if subjects_truncated {
