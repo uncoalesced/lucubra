@@ -67,6 +67,7 @@ pub const KNOWN_TYPES: &[&str] = &[
     "result.recorded",
     "grading_scheme.set",
     "target.set",
+    "subject.prerequisite",
     "mock_test.exported",
     "mock_test.graded",
 ];
