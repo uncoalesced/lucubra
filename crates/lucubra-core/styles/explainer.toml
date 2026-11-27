@@ -1,0 +1,8 @@
+id = "explainer"
+name = "Explainer"
+summary = "Continuous explanation of concepts with a light check every few concepts."
+step_order = ["explain", "explain", "explain", "light_check"]
+question_every = 3
+depth = "deep"
+advance_on = "always"
+hints = true
