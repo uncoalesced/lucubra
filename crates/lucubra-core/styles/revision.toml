@@ -1,0 +1,8 @@
+id = "revision"
+name = "Revision"
+summary = "Fast pass over unit cards and weak concepts before an exam."
+step_order = ["review_card", "weak_concepts", "quick_check"]
+question_every = 2
+depth = "brief"
+advance_on = "always"
+hints = true
