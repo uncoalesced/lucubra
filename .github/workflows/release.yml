@@ -105,7 +105,7 @@ jobs:
           out="$(uvx --from "$(ls dist/*.whl)" lucubra --version)"
           echo "$out"
           test "$out" = "lucubra $VERSION"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel-${{ matrix.id }}
           path: dist/*.whl
@@ -164,7 +164,7 @@ jobs:
         with:
           command: sdist
           args: --out dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sdist
           path: dist/*.tar.gz
@@ -223,7 +223,7 @@ jobs:
         run: |
           unzip -q "out/lucubra-$VERSION.mcpb" -d verify
           test "$(uv run --directory verify lucubra --version)" = "lucubra $VERSION"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mcpb
           path: out/*.mcpb
@@ -243,7 +243,7 @@ jobs:
           cp dl/* release/
           cd release
           sha256sum -- * | tee SHA256SUMS
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-files
           path: release/*
