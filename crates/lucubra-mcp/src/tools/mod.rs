@@ -113,7 +113,7 @@ pub fn build_tools() -> Vec<Tool> {
         ),
         tool_def::<profile::ProfileArgs>(
             "lucubra_profile",
-            "Inspect or update onboarding profile answers, subjects, exams, and preferences (actions: next, answer, skip, get, set).",
+            "Inspect or update onboarding profile answers, subjects, exams, and preferences (actions: next, answer, skip, get, set, preference; preference keys include teaching_style, one_question_at_a_time and the reminders_* opt-ins).",
             false,
             false,
         ),
