@@ -15,7 +15,7 @@ Lucubra is local-first software. It runs on your machine, reads the files in the
   - It reads the calendar address (iCal) that you supply, to find your busy times. The address stays on this machine, outside the workspace. It never appears in the event log, in tool responses or in error messages.
   - It downloads a file into `inbox/` when you ask, and only from a site listed in `SOURCES.md`. Downloads are off when that file does not exist.
 
-  Neither request carries cookies, workspace content or anything that identifies you.
+  Neither request carries cookies or workspace content. As with any web request, the site you reach sees your IP address.
 - It listens on a network port only while `lucubra serve` runs the companion page. The page is bound to `127.0.0.1`, so other machines cannot reach it, and every request needs a fresh token.
 - It does not send your files, your event logs or your cache to the developers or to any third party.
 - It does not open files that exist only in a cloud folder until you approve it.
