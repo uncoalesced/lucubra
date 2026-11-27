@@ -57,9 +57,6 @@ SCENARIO_TESTS = {
 # Scenarios not built yet, with the phase that builds them.
 PENDING = {
     "S36": "M10 performance run",
-    "S51": "round-4 practice (past papers)",
-    "S52": "round-4 practice (fetch)",
-    "S53": "round-4 practice (mock test)",
 }
 
 
