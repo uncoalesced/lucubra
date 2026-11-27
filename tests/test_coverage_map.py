@@ -56,7 +56,6 @@ SCENARIO_TESTS = {
 
 # Scenarios not built yet, with the phase that builds them.
 PENDING = {
-    "S36": "M10 performance run",
 }
 
 

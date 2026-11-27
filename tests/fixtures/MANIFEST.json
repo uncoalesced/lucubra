@@ -1076,8 +1076,8 @@
     {
       "path": "image/diagram.jpg",
       "format": "image",
-      "sha256": "dcf2d070354ac72c9d15a3a85fa0d793433b5383205a94817c9f3d6e44379d0f",
-      "bytes": 15203,
+      "sha256": "0c9ba99c65fb22902f394a9e98b5c82f4ed6a4be4f9c7172e1bdefd03ecf3694",
+      "bytes": 15132,
       "stub": false,
       "generator": "scripts/fixtures/gen_image.py",
       "scenarios": [
@@ -1094,8 +1094,8 @@
     {
       "path": "image/photo-notes.png",
       "format": "image",
-      "sha256": "1141f99842ce463e945dfbeac714b594511b9a4e3ece33ec47ffe1d38927deb2",
-      "bytes": 284350,
+      "sha256": "653747d39b78deb2bd7cd87f43e8302062e1fffcdb5770342aad9e35c11f8ae8",
+      "bytes": 286893,
       "stub": false,
       "generator": "scripts/fixtures/gen_image.py",
       "scenarios": [
@@ -1112,8 +1112,8 @@
     {
       "path": "image/sample.webp",
       "format": "image",
-      "sha256": "18c36e074c1675e4d43e312d15efdc6a6b002fdbdc70a42e0e6ae5651578e281",
-      "bytes": 7504,
+      "sha256": "6f4ff443b18ec5d01fed1a77cb3c2f71b928ea5ac25f4396d31e19cace8fd53d",
+      "bytes": 8004,
       "stub": false,
       "generator": "scripts/fixtures/gen_image.py",
       "scenarios": [
@@ -1184,8 +1184,8 @@
     {
       "path": "pdf/indic-hindi.pdf",
       "format": "pdf",
-      "sha256": "e05d1602c1a278e20ed1b4fbd12c74dd9033f82e9a4076812d21316dea9015b2",
-      "bytes": 27581,
+      "sha256": "17a830d7d7d5b82a6c77f5cebd99dcda1e52a94bfdb1388c87e1e6c2e3bd408e",
+      "bytes": 2785,
       "stub": false,
       "generator": "scripts/fixtures/gen_pdf.py",
       "scenarios": [
@@ -1207,13 +1207,13 @@
           "जल और कार्बन डाइऑक्साइड मिलकर शर्करा तथा ऑक्सीजन बनाते हैं।"
         ]
       },
-      "notes": "Original Devanagari sentences rendered with Nirmala.ttc"
+      "notes": "Original Devanagari sentences as text with a ToUnicode map; no font is embedded"
     },
     {
       "path": "pdf/indic-kannada.pdf",
       "format": "pdf",
-      "sha256": "808dac928d99d7b497f194fa9ffd673d1703c0e86a1e0280d855fc1352277423",
-      "bytes": 32097,
+      "sha256": "55aa70bb52813f64af8f1b67b39740e2aa2cb4033e8a950fcdec00810fe5bf70",
+      "bytes": 2817,
       "stub": false,
       "generator": "scripts/fixtures/gen_pdf.py",
       "scenarios": [
@@ -1235,13 +1235,13 @@
           "ನೀರು ಮತ್ತು ಇಂಗಾಲದ ಡೈಆಕ್ಸೈಡ್ ಸೇರಿ ಗ್ಲೂಕೋಸ್ ಉತ್ಪತ್ತಿಯಾಗುತ್ತದೆ."
         ]
       },
-      "notes": "Original Kannada sentences rendered with Nirmala.ttc"
+      "notes": "Original Kannada sentences as text with a ToUnicode map; no font is embedded"
     },
     {
       "path": "pdf/indic-malayalam.pdf",
       "format": "pdf",
-      "sha256": "cf1e5f0c73ac9bbe0efadc540aec018047bc3b02d1fc7ed117f1f2c955f36d6d",
-      "bytes": 31805,
+      "sha256": "0bf46111919deb13142fa05a1ab513dd29350d018b90aa6b5c621f8a09e64243",
+      "bytes": 2855,
       "stub": false,
       "generator": "scripts/fixtures/gen_pdf.py",
       "scenarios": [
@@ -1264,7 +1264,7 @@
           "താപനിലയും ജലലഭ്യതയും ചെടികളുടെ വളർച്ചയെ സ്വാധീനിക്കുന്നു."
         ]
       },
-      "notes": "Original Malayalam sentences rendered with Nirmala.ttc"
+      "notes": "Original Malayalam sentences as text with a ToUnicode map; no font is embedded"
     },
     {
       "path": "pdf/mixed-threshold.pdf",
@@ -1296,8 +1296,8 @@
     {
       "path": "pdf/scanned-2pages.pdf",
       "format": "pdf",
-      "sha256": "809a53a009c1e63d33daea3fcf12c741c94a50b9489967275020076bfaf40c80",
-      "bytes": 20369,
+      "sha256": "adea8c321f1f94b78db26a425e077018b6c001f2e2e8577347bec61c393d43c2",
+      "bytes": 21596,
       "stub": false,
       "generator": "scripts/fixtures/gen_pdf.py",
       "scenarios": [

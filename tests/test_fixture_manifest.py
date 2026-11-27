@@ -47,7 +47,7 @@ VALID_FORMATS = {
     "unknown",
 }
 
-EXCLUDED_FILES = {"MANIFEST.json", "README.md", ".gitattributes"}
+EXCLUDED_FILES = {"MANIFEST.json", "README.md", ".gitattributes", "LICENSE"}
 MAX_CORPUS_BYTES = 15 * 1024 * 1024
 MAX_FILE_BYTES = 3 * 1024 * 1024
 BANNED_PHRASES = ("engineered " + "by", "generated " + "by")
@@ -177,3 +177,23 @@ def test_special_fixture_invariants() -> None:
     null_entries = [e for e in classify_pdfs if e["expect"]["subject"] is None]
     assert len(null_entries) == 2
     assert all(e["notes"] == "host batch" for e in null_entries)
+
+
+def test_test_data_is_mit_and_embeds_no_font_program() -> None:
+    """All test data is MIT licensed, and no fixture carries a font program.
+
+    Font programs (FontFile, FontFile2, FontFile3) are usually under their own
+    licence, so a PDF fixture names its font without embedding it, and the
+    raster fixtures use Pillow's bundled Aileron (CC0).
+    """
+    repo = FIXTURES_ROOT.parent.parent
+    for folder in (FIXTURES_ROOT, repo / "crates" / "lucubra-mcp" / "tests" / "fixtures"):
+        licence = (folder / "LICENSE").read_text(encoding="utf-8")
+        assert licence.startswith("MIT License"), f"{folder} needs the MIT LICENSE file"
+    for pdf in sorted(FIXTURES_ROOT.rglob("*.pdf")):
+        raw = pdf.read_bytes()
+        for key in (b"/FontFile ", b"/FontFile2", b"/FontFile3"):
+            assert key not in raw, f"{pdf.name} embeds a font program ({key!r})"
+    for gen in sorted((repo / "scripts" / "fixtures").glob("*.py")):
+        src = gen.read_text(encoding="utf-8")
+        assert "Windows\Fonts" not in src and ".ttc" not in src, f"{gen.name} uses a system font"

@@ -11,7 +11,7 @@ license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 keywords = ["study", "mcp", "local-first", "spaced-repetition"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Education",
     "Programming Language :: Python :: 3",
     "Programming Language :: Rust",

@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.0-beta.1] - 2026-11-27
+
+Release candidate for the public beta (decision D50). The tag and the PyPI release wait for approval.
+
 ### Added
 
 - Event core: append-only, per-device JSONL event logs in `.lucubra/events/`, with a hybrid logical clock, replay in a deterministic order and a rebuildable SQLite state cache.

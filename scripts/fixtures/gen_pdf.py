@@ -18,11 +18,8 @@ import io
 import re
 import sys
 import unicodedata
-from pathlib import Path
 
 from _common import FIXED_PDF_DATE, FIXTURES_ROOT, MALAYALAM_TEXT, write_bytes
-
-NIRMALA_TTC = Path(r"C:\Windows\Fonts\Nirmala.ttc")
 
 TEXT_3PAGES_CONTENT: list[tuple[str, str | None, list[str]]] = [
     (
@@ -217,7 +214,10 @@ def manifest_entries() -> list[dict[str, object]]:
                     "search_words": spec["search_words"],
                     "contains": list(lines),
                 },
-                "notes": f"Original {spec['script']} sentences rendered with Nirmala.ttc",
+                "notes": (
+                    f"Original {spec['script']} sentences as text with a ToUnicode map; "
+                    "no font is embedded"
+                ),
             }
         )
     return entries
@@ -272,7 +272,7 @@ def _build_scanned_2pages() -> bytes:
 
     buf = io.BytesIO()
     c = _new_canvas(buf, "Scanned Biology Notes")
-    font = ImageFont.truetype(str(NIRMALA_TTC), 26, index=0)
+    font = ImageFont.load_default(size=26)
     pages_text = [
         [
             "Scanned Page 1: Membrane Lipids",
@@ -363,22 +363,70 @@ def _build_encrypted() -> bytes:
 
 
 def _build_indic(spec: dict[str, object]) -> bytes:
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
+    """A one-page PDF whose text is extractable but embeds no font program.
 
-    if "NirmalaFixture" not in pdfmetrics.getRegisteredFontNames():
-        pdfmetrics.registerFont(TTFont("NirmalaFixture", str(NIRMALA_TTC), subfontIndex=0))
+    Each distinct character gets a two-byte code (Identity-H) and a ToUnicode
+    entry, so text extraction returns the original sentences. The font is
+    named but not embedded, which keeps proprietary or licensed font data out
+    of the corpus. Viewers substitute a font, so the page may not render the
+    script correctly; extraction is what the fixture tests.
+    """
+    lines = [str(line) for line in spec["lines"]]  # type: ignore[attr-defined]
+    chars = sorted({ch for line in lines for ch in line})
+    code = {ch: i + 1 for i, ch in enumerate(chars)}
 
-    buf = io.BytesIO()
-    c = _new_canvas(buf, str(spec["title"]))
-    c.setFont("NirmalaFixture", 13)
-    y = 730
-    for line in spec["lines"]:  # type: ignore[attr-defined]
-        c.drawString(54, y, str(line))
-        y -= 28
-    c.showPage()
-    c.save()
-    return buf.getvalue()
+    def hex_of(line: str) -> str:
+        return "".join(f"{code[ch]:04X}" for ch in line)
+
+    ops = ["BT", "/F1 13 Tf", "16 TL", "54 730 Td"]
+    for line in lines:
+        ops.append(f"<{hex_of(line)}> Tj T*")
+    ops.append("ET")
+    content = "\n".join(ops).encode("ascii")
+
+    bf = "\n".join(f"<{code[ch]:04X}> <{ord(ch):04X}>" for ch in chars)
+    cmap = (
+        "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n"
+        "/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n"
+        "/CMapName /Lucubra-UCS def\n/CMapType 2 def\n"
+        "1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n"
+        f"{len(chars)} beginbfchar\n{bf}\nendbfchar\n"
+        "endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend"
+    ).encode("ascii")
+
+    title = str(spec["title"]).encode("ascii", "replace")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+        b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type0 /BaseFont /LucubraFixture "
+        b"/Encoding /Identity-H /DescendantFonts [6 0 R] /ToUnicode 7 0 R >>",
+        b"<< /Length %d >>\nstream\n" % len(content) + content + b"\nendstream",
+        b"<< /Type /Font /Subtype /CIDFontType2 /BaseFont /LucubraFixture "
+        b"/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> "
+        b"/FontDescriptor 8 0 R /DW 600 /CIDToGIDMap /Identity >>",
+        b"<< /Length %d >>\nstream\n" % len(cmap) + cmap + b"\nendstream",
+        b"<< /Type /FontDescriptor /FontName /LucubraFixture /Flags 32 "
+        b"/FontBBox [0 -250 1000 900] /ItalicAngle 0 /Ascent 900 /Descent -250 "
+        b"/CapHeight 700 /StemV 80 >>",
+        b"<< /Title (" + title + b") /Producer (fixture) >>",
+    ]
+    out = bytearray(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n")
+    offsets = []
+    for n, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % n + body + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    for off in offsets:
+        out += b"%010d 00000 n \n" % off
+    out += b"trailer\n<< /Size %d /Root 1 0 R /Info %d 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (
+        len(objects) + 1,
+        len(objects),
+        xref,
+    )
+    return bytes(out)
 
 
 def _non_ws_counts(pdf_bytes: bytes) -> list[int]:
