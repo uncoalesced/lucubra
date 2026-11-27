@@ -268,6 +268,20 @@ lucubra term close -w <workspace> --term "Semester 5"
 
 Lucubra copies the generated files (indexes, unit cards, study scripts and the calendar file) into `archive/semester-5/` and leaves your own notes and files where they are. A subject you failed carries over to the next term with its mastery and practice items. Review cards of the other subjects retire; add `--keep <subject>` to keep a subject's cards on a slow schedule instead, for example for a cumulative exam later. A term can be closed only once.
 
+## Past papers, mock tests and trusted sources
+
+Give the assistant your past papers. It adds each question with its year and marks, mapped to a unit, and `lucubra_status` shows how often each unit was asked, for example "asked in 4 of the last 5 years". This is a record of past papers, not a prediction. Units asked often get somewhat more planning time, and exam simulations follow the mix of units and question types in your past papers.
+
+Ask for a mock test ("make me a 3-hour mock paper for contracts"). Lucubra writes it to `exports/` as a Markdown file and an HTML page. Open the HTML page in a browser to print it or save it as PDF. Answer on paper, photograph the sheets into `inbox/` and ask the assistant to mark it. Multiple-choice and other closed questions are marked by Lucubra; written answers are marked against their rubrics. Check the assistant's reading of your answers before you confirm it.
+
+`SOURCES.md` in the workspace lists sites you trust, such as your university portal, one per line:
+
+```
+- https://exams.myuniversity.edu (past papers)
+```
+
+The assistant checks this list before searching the web. Lucubra itself downloads a file only when you ask, only over HTTPS, and only from a listed site or its subdomains. It refuses any other site, including one that a listed site redirects to. The file goes into `inbox/`.
+
 ## Reminders
 
 Reminders are off until you turn them on. There are three types, each switched on separately: study blocks, review days and exam countdown. When a type is on, `schedule/lucubra-plan.ics` gets calendar alarms for it. Review days are the days your review cards fall due. Import or subscribe to the file in your calendar app to receive the alarms.
