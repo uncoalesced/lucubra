@@ -68,6 +68,8 @@ pub const KNOWN_TYPES: &[&str] = &[
     "grading_scheme.set",
     "target.set",
     "subject.prerequisite",
+    // Addendum A5
+    "source.fetched",
     "mock_test.exported",
     "mock_test.graded",
 ];
