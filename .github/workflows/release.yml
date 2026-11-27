@@ -127,7 +127,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.wheel }}
           path: wheel
@@ -179,7 +179,7 @@ jobs:
         with:
           node-version: "22"
       - uses: astral-sh/setup-uv@v7
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: wheel-linux-x86_64
           path: wheels
@@ -233,7 +233,7 @@ jobs:
     needs: [wheels, sdist, mcpb, install-check]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dl
           merge-multiple: true
@@ -259,7 +259,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-files
           path: dist
@@ -274,7 +274,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-files
           path: release
