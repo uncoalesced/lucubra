@@ -119,7 +119,7 @@ pub fn build_tools() -> Vec<Tool> {
         ),
         tool_def::<ingest::IngestArgs>(
             "lucubra_ingest",
-            "Scan inbox/ files, check extraction/vision status, page pending vision items, or ingest a pasted Pack-mode handoff block (actions: scan, status, approve_layout, undo_moves, handoff, fetch).",
+            "Scan inbox/ files, check extraction/vision status, page pending vision items, or ingest a pasted Pack-mode handoff block, or download a file the user asked for from a SOURCES.md domain into inbox/ (actions: scan, status, approve_layout, undo_moves, handoff, fetch).",
             false,
             false,
         ),
