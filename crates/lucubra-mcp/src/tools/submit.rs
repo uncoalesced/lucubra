@@ -154,6 +154,9 @@ fn check_item_shape<'a>(
     let Some(obj) = item.as_object() else {
         return Err(invalid(format!("items[{idx}] must be an object")));
     };
+    if let Some(p) = obj.get("past_paper") {
+        lucubra_core::papers::validate(p).map_err(|e| invalid(format!("items[{idx}]: {e}")))?;
+    }
     if obj
         .get("prompt")
         .and_then(Value::as_str)

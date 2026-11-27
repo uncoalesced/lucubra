@@ -7,6 +7,7 @@
 pub mod budget;
 pub mod elicit;
 pub mod envelope;
+pub mod fetch;
 pub mod host;
 pub mod instructions;
 pub mod material;

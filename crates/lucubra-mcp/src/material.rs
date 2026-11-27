@@ -167,35 +167,32 @@ pub fn read_preferences_summary(ws_root: &Path) -> Option<PreferencesSummary> {
 
 /// Summarizes domain entries listed in `SOURCES.md` if present (A5).
 pub fn read_sources_summary(ws_root: &Path) -> SourcesSummary {
-    let Ok((_, path)) = resolve_workspace_path(ws_root, "SOURCES.md") else {
+    let Some(mut domains) = source_domains(ws_root) else {
         return SourcesSummary {
             configured: false,
             domain_count: 0,
             domains: Vec::new(),
         };
     };
-    let Ok(meta) = fs::symlink_metadata(&path) else {
-        return SourcesSummary {
-            configured: false,
-            domain_count: 0,
-            domains: Vec::new(),
-        };
-    };
-    if meta.file_type().is_symlink() || !meta.is_file() {
-        return SourcesSummary {
-            configured: false,
-            domain_count: 0,
-            domains: Vec::new(),
-        };
+    let domain_count = domains.len();
+    domains.truncate(32);
+    SourcesSummary {
+        configured: true,
+        domain_count,
+        domains,
     }
-    let Ok(raw) = fs::read_to_string(&path) else {
-        return SourcesSummary {
-            configured: false,
-            domain_count: 0,
-            domains: Vec::new(),
-        };
-    };
-    let mut domains = Vec::new();
+}
+
+/// Every domain listed in `SOURCES.md`, or `None` when the file is absent,
+/// a symlink or unreadable (fetch is then off).
+pub fn source_domains(ws_root: &Path) -> Option<Vec<String>> {
+    let (_, path) = resolve_workspace_path(ws_root, "SOURCES.md").ok()?;
+    let meta = fs::symlink_metadata(&path).ok()?;
+    if meta.file_type().is_symlink() || !meta.is_file() {
+        return None;
+    }
+    let raw = fs::read_to_string(&path).ok()?;
+    let mut domains: Vec<String> = Vec::new();
     for line in raw.lines() {
         let trimmed = line.trim().trim_start_matches(['-', '*', ' ']).trim();
         if trimmed.is_empty() || trimmed.starts_with('#') {
@@ -209,17 +206,12 @@ pub fn read_sources_summary(ws_root: &Path) -> SourcesSummary {
             .next()
             .unwrap_or("")
             .trim_matches(['`', '"', '\'']);
-        if host.contains('.') && !host.contains("..") && !domains.iter().any(|d| d == host) {
-            domains.push(host.to_ascii_lowercase());
+        let host = host.to_ascii_lowercase();
+        if host.contains('.') && !host.contains("..") && !domains.contains(&host) {
+            domains.push(host);
         }
     }
-    let domain_count = domains.len();
-    domains.truncate(32);
-    SourcesSummary {
-        configured: true,
-        domain_count,
-        domains,
-    }
+    Some(domains)
 }
 
 #[cfg(test)]

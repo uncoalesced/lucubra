@@ -176,6 +176,7 @@ pub fn execute(
             })),
             "recommendations": lucubra_core::domain::recommendations(state),
             "grades": lucubra_core::grades::summary(state),
+            "past_papers": lucubra_core::papers::history(state, 10),
             "needs_user": questions,
         }),
         next,

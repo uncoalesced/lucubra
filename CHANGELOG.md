@@ -38,6 +38,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Grades: a grading scheme (a 10-point credit-weighted preset or custom bands), results per term with credits, SGPA and CGPA in `lucubra_status`, and subject credits and prerequisites in the profile.
 - Target CGPA: the grade and minimum marks each pending subject needs, or the best reachable value when the target is out of reach. While a target is set, the planner gives more weight to subjects with more credits (at most 1.5 times).
 - `lucubra term close --term <label> [--keep <subject>]` copies the generated files into `archive/<label>/`, carries failed subjects over with their mastery and items, keeps chosen subjects' review cards on a slow schedule and retires the rest. Your own files are not moved.
+- Past papers: questions submitted with `past_paper: {year, marks}` give topic frequency in `lucubra_status` ("asked in 4 of the last 5 years", shown as history, not a prediction). Frequency raises a unit's planner weight by at most 1.5 times, and exam simulation follows the past papers' unit and question-type mix.
+- Mock tests: `lucubra_export action=mock_test` writes a printable paper to `exports/` as Markdown and as an HTML page you can print or save as PDF, with marks per question and no answer key. `lucubra_practice action=mock_grade` grades the photographed answers: closed questions by the engine, open ones by rubric scores. The read-back stays unverified until you confirm it.
+- Downloads: `lucubra_ingest action=fetch` saves a file into `inbox/` from a site listed in `SOURCES.md`, over HTTPS, checking every redirect against the list. It is off when `SOURCES.md` does not exist.
 - Community and policy documents: README, contributing guide, code of conduct, security policy, privacy statement, terms of use, accessibility statement and data handling policy.
 - Issue templates (bug report, feature request, host compatibility report) and a pull request template.
 

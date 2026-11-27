@@ -33,6 +33,12 @@ pub struct ExportArgs {
     /// Output format: apkg or tsv (for anki); md (for pack); md or pdf (for mock_test).
     #[serde(default)]
     pub format: Option<String>,
+    /// Number of questions (for mock_test, 1 to 60, default 10).
+    #[serde(default)]
+    pub count: Option<u64>,
+    /// Time allowed in minutes (for mock_test, 10 to 480, default 180).
+    #[serde(default)]
+    pub duration_minutes: Option<u64>,
     /// Optional completed-step checkpoints to log alongside this call.
     #[serde(default)]
     pub progress: Option<Vec<ProgressEntry>>,
@@ -119,11 +125,12 @@ pub fn execute(
             "session_id",
             "exam_id",
             "format",
+            "count",
+            "duration_minutes",
             "progress",
         ],
         "lucubra_export",
     )?;
-    let _eid = opt_str(args, "exam_id")?;
     let format = opt_str(args, "format")?;
 
     if action == "mock_test" {
@@ -141,11 +148,7 @@ pub fn execute(
                 "format for action 'mock_test' must be 'md' or 'pdf'",
             ));
         }
-        return Err(ToolError::new(
-            ToolErrorCode::NotImplemented,
-            "Mock test export (lucubra_export mock_test) is implemented in milestone M6.",
-        )
-        .with_detail(ctx.host.profile.export_recipe));
+        return mock_test(args, ctx, subj, limits);
     }
 
     if let Some(s) = opt_str(args, "subject")? {
@@ -352,4 +355,99 @@ pub fn execute(
         }
         _ => unreachable!(),
     }
+}
+
+fn mock_test(
+    args: &Map<String, Value>,
+    ctx: &ToolContext<'_>,
+    subject: &str,
+    limits: BudgetLimits,
+) -> std::result::Result<ToolOutcome, ToolError> {
+    use lucubra_core::mock;
+    let bad = |m: String| ToolError::new(ToolErrorCode::InvalidArguments, m);
+    let ws_fail = |e: lucubra_core::Error| {
+        ToolError::new(
+            ToolErrorCode::WorkspaceError,
+            format!("workspace update failed: {e}"),
+        )
+    };
+    let count = crate::tools::opt_u64(
+        args,
+        "count",
+        1,
+        60,
+        "count must be an integer from 1 to 60",
+    )?
+    .unwrap_or(10);
+    let minutes = crate::tools::opt_u64(
+        args,
+        "duration_minutes",
+        10,
+        480,
+        "duration_minutes must be an integer from 10 to 480",
+    )?
+    .unwrap_or(180);
+    let state = ctx.ws.replay().map_err(ws_fail)?.state;
+    let title = match opt_str(args, "exam_id")? {
+        Some(id) => {
+            let exam = state
+                .get(col::EXAMS, id)
+                .ok_or_else(|| bad(format!("exam '{id}' is not in the profile")))?;
+            exam.get("title")
+                .and_then(Value::as_str)
+                .unwrap_or(id)
+                .to_owned()
+        }
+        None => state
+            .get(col::SUBJECTS, subject)
+            .and_then(|s| s.get("title"))
+            .and_then(Value::as_str)
+            .unwrap_or(subject)
+            .to_owned(),
+    };
+    let paper = mock::build(&state, subject, count as usize, minutes as u32).map_err(bad)?;
+    let mock_id = format!("mt_{}", ulid::Ulid::new().to_string().to_lowercase());
+    let days = (std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+        / 86_400) as i64;
+    let date = lucubra_core::planner::iso_from_days(days);
+    let root = ctx.ws.root();
+    let mut stem = format!("MOCK_{date}_{subject}");
+    let mut n = 2;
+    while root.join(format!("exports/{stem}.md")).exists() {
+        stem = format!("MOCK_{date}_{subject}-{n}");
+        n += 1;
+    }
+    let files = vec![format!("exports/{stem}.md"), format!("exports/{stem}.html")];
+    for (rel, body) in [
+        (&files[0], mock::markdown(&paper, &title, &mock_id)),
+        (&files[1], mock::html(&paper, &title, &mock_id)),
+    ] {
+        lucubra_core::projection::write_atomic(&root.join(rel), body.as_bytes())
+            .map_err(ws_fail)?;
+    }
+    ctx.ws
+        .append(
+            "mock_test.exported",
+            mock::exported_payload(&paper, &mock_id, &date, &files),
+        )
+        .map_err(ws_fail)?;
+    Ok(ToolOutcome {
+        data: json!({
+            "mock_id": mock_id,
+            "files": files,
+            "questions": paper.questions.len(),
+            "total_marks": paper.total_marks,
+            "duration_minutes": minutes,
+            "print": "open the .html file in a browser and print it, or save it as PDF",
+            "after": "photograph the answer sheets into inbox/, read them back, then call lucubra_practice(action=\"mock_grade\")",
+        }),
+        next: Some("print_and_sit".into()),
+        warnings: Vec::new(),
+        per_call_limit: limits.response_limit,
+        suppress_wrap_up: false,
+        active_session_override: None,
+    })
 }

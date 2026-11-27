@@ -62,6 +62,8 @@ pub mod col {
     pub const RESULTS: &str = "results";
     /// Closed terms by term label: the `term.closed` payload.
     pub const TERMS: &str = "terms";
+    /// Mock tests by mock id: the exported paper, then the graded breakdown.
+    pub const MOCK_TESTS: &str = "mock_tests";
 }
 
 /// Event types the engine folds into state. Other known types are stored in
@@ -110,6 +112,8 @@ pub const FOLDED_TYPES: &[&str] = &[
     "target.set",
     "term.closed",
     "subject.prerequisite",
+    "mock_test.exported",
+    "mock_test.graded",
 ];
 
 /// Why an event did not change state.
@@ -454,6 +458,17 @@ impl State {
                 let key = str_field(data, "key").ok_or(Skip::BadPayload("key"))?;
                 let value = data.get("value").ok_or(Skip::BadPayload("value"))?;
                 self.put(col::PREFERENCES, key, value.clone());
+            }
+            "mock_test.exported" | "mock_test.graded" => {
+                let id = str_field(data, "mock_id").ok_or(Skip::BadPayload("mock_id"))?;
+                let mut upd = fields.clone();
+                upd.remove("mock_id");
+                if event.kind == "mock_test.graded" {
+                    let mut graded = Map::new();
+                    graded.insert("graded".into(), Value::Object(upd));
+                    upd = graded;
+                }
+                self.merge(col::MOCK_TESTS, id, &upd);
             }
             "grading_scheme.set" => {
                 self.put(col::GRADING, "scheme", data.clone());

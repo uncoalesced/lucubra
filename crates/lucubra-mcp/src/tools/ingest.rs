@@ -560,16 +560,61 @@ pub fn execute(
                 "url",
                 "provide 'url' (https://...) from a domain listed in SOURCES.md",
             )?;
-            if !url.starts_with("https://") && !url.starts_with("http://") {
+            use crate::fetch::{FetchError, fetch, parse};
+            let root = ctx.ws.root();
+            let domains = crate::material::source_domains(root).ok_or_else(|| {
+                ToolError::new(
+                    ToolErrorCode::UntrustedDomain,
+                    "downloads are off until SOURCES.md exists; create SOURCES.md in the workspace and list the site's domain",
+                )
+            })?;
+            // Check the first host before any network use, so a refusal never connects.
+            let host = parse(url)
+                .map_err(|e| match e {
+                    FetchError::BadUrl(m) => invalid(m),
+                    other => invalid(format!("{other:?}")),
+                })?
+                .host;
+            if !crate::fetch::allowed(&host, &domains) {
                 return Err(ToolError::new(
-                    ToolErrorCode::InvalidArguments,
-                    "url must start with https:// or http://",
+                    ToolErrorCode::UntrustedDomain,
+                    format!(
+                        "{host} is not in SOURCES.md; add the domain to SOURCES.md if you trust it, then ask again"
+                    ),
                 ));
             }
-            Err(ToolError::new(
-                ToolErrorCode::NotImplemented,
-                "Domain-restricted download (lucubra_ingest fetch) is implemented in milestone M6; save the downloaded file into inbox/ manually.",
-            ))
+            let saved = fetch(
+                url,
+                &domains,
+                &root.join("inbox"),
+                lucubra_ingest::limits::MAX_FILE_BYTES,
+            )
+            .map_err(|e| match e {
+                FetchError::BadUrl(m) => invalid(m),
+                FetchError::Untrusted(h) => ToolError::new(
+                    ToolErrorCode::UntrustedDomain,
+                    format!("the download redirected to {h}, which is not in SOURCES.md; add it only if you trust it"),
+                ),
+                FetchError::Failed(m) => ToolError::new(ToolErrorCode::WorkspaceError, m),
+            })?;
+            ctx.ws
+                .append(
+                    "source.fetched",
+                    json!({"domain": saved.host, "file": format!("inbox/{}", saved.file), "bytes": saved.bytes}),
+                )
+                .map_err(ws_error)?;
+            Ok(ToolOutcome {
+                data: json!({
+                    "saved": format!("inbox/{}", saved.file),
+                    "domain": saved.host,
+                    "bytes": saved.bytes,
+                }),
+                next: Some("scan".into()),
+                warnings: Vec::new(),
+                per_call_limit: limits.response_limit,
+                suppress_wrap_up: false,
+                active_session_override: None,
+            })
         }
         _ => unreachable!(),
     }

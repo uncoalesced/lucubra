@@ -4,6 +4,7 @@
 //! `lucubra_practice`: FSRS practice queue, engine grading of closed-format
 //! answers, and adaptive exam simulation (SPEC sections 13 and 14).
 
+use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use lucubra_core::grader::{Graded, elo_difficulty, grade, staircase};
@@ -24,7 +25,7 @@ use crate::tools::{
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PracticeArgs {
-    /// Action: next, answer, or exam_sim.
+    /// Action: next, answer, exam_sim, or mock_grade.
     pub action: String,
     /// Optional subject slug filter.
     #[serde(default)]
@@ -59,6 +60,18 @@ pub struct PracticeArgs {
     /// Number of items in exam_sim (1-100).
     #[serde(default)]
     pub count: Option<u64>,
+    /// Mock test id from lucubra_export(mock_test) (for mock_grade).
+    #[serde(default)]
+    pub mock_id: Option<String>,
+    /// Answers read back from the photographed sheets (for mock_grade): objects
+    /// with `n` (question number), `read_back` (the text as read), `response`
+    /// (the answer in the item's format, for closed questions) and `score`
+    /// (marks awarded against the rubric, for open questions).
+    #[serde(default)]
+    pub answers: Option<Vec<Value>>,
+    /// Confirm the read-back after the user has checked it (for mock_grade).
+    #[serde(default)]
+    pub confirm: Option<bool>,
     /// Day to practise as, YYYY-MM-DD (defaults to today, UTC).
     #[serde(default)]
     pub today: Option<String>,
@@ -225,12 +238,13 @@ pub fn execute(
     ctx: &ToolContext<'_>,
     limits: BudgetLimits,
 ) -> std::result::Result<ToolOutcome, ToolError> {
-    let action = require_action(args, &["next", "answer", "exam_sim"])?;
+    let action = require_action(args, &["next", "answer", "exam_sim", "mock_grade"])?;
     let state = ctx.ws.replay().map_err(ws_err)?.state;
     match action {
         "next" => next(args, &state, limits),
         "answer" => answer(args, ctx, &state, limits),
         "exam_sim" => exam_sim(args, ctx, &state, limits),
+        "mock_grade" => mock_grade(args, ctx, &state, limits),
         _ => unreachable!(),
     }
 }
@@ -405,9 +419,6 @@ const CLOSED: &[&str] = &[
 ];
 
 /// Closed-format items of `subject` for a simulation, not yet served.
-///
-/// shortcut: the blueprint draws on every closed-format item of the subject;
-/// weight by the past-paper type mix once past papers are tagged.
 fn pool<'a>(
     state: &'a State,
     subject: &str,
@@ -422,6 +433,48 @@ fn pool<'a>(
                 && text(i, "type").is_some_and(|t| CLOSED.contains(&t))
         })
         .collect()
+}
+
+/// The next simulation item. With past papers, the unit furthest below its
+/// share of past-paper marks goes first, and the types those papers used are
+/// preferred (S51); then the difficulty nearest the staircase step wins.
+fn pick<'a>(
+    state: &State,
+    subject: &str,
+    items: &[(&'a String, &'a Value)],
+    served: &[String],
+    step: u8,
+) -> Option<(&'a String, &'a Value)> {
+    let (shares, kinds) = lucubra_core::papers::blueprint(state, subject);
+    if shares.is_empty() {
+        return nearest(items, step);
+    }
+    let unit_of = |v: &Value| text(v, "unit").unwrap_or_default().to_owned();
+    let mut done: BTreeMap<String, f64> = BTreeMap::new();
+    for id in served {
+        if let Some(i) = state.get(col::ITEMS, id) {
+            *done.entry(unit_of(i)).or_default() += 1.0;
+        }
+    }
+    let total = served.len() as f64 + 1.0;
+    let deficit = |u: &str| {
+        shares.get(u).copied().unwrap_or(0.0) * total - done.get(u).copied().unwrap_or(0.0)
+    };
+    let unit = items
+        .iter()
+        .map(|(_, v)| unit_of(v))
+        .max_by(|a, b| deficit(a).total_cmp(&deficit(b)).then_with(|| b.cmp(a)))?;
+    let in_unit: Vec<_> = items
+        .iter()
+        .copied()
+        .filter(|(_, v)| unit_of(v) == unit)
+        .collect();
+    let typed: Vec<_> = in_unit
+        .iter()
+        .copied()
+        .filter(|(_, v)| text(v, "type").is_some_and(|t| kinds.contains(t)))
+        .collect();
+    nearest(if typed.is_empty() { &in_unit } else { &typed }, step)
 }
 
 /// The item whose difficulty is nearest the staircase step.
@@ -503,7 +556,7 @@ fn start_sim(
     )?
     .unwrap_or(10);
     let items = pool(state, subject, mode, &[]);
-    let (first_id, first) = nearest(&items, 3).ok_or_else(|| {
+    let (first_id, first) = pick(state, subject, &items, &[], 3).ok_or_else(|| {
         not_found(format!(
             "no closed-format practice items for '{subject}' yet; store some with lucubra_submit(action=\"items\")"
         ))
@@ -584,7 +637,13 @@ fn answer_sim(
     } else {
         let subject = text(sim, "subject").unwrap_or_default();
         let sim_mode = text(sim, "mode").unwrap_or("strict");
-        nearest(&pool(state, subject, sim_mode, &served), step)
+        pick(
+            state,
+            subject,
+            &pool(state, subject, sim_mode, &served),
+            &served,
+            step,
+        )
     };
     let mut served_after = served.clone();
     if let Some((id, _)) = upcoming {
@@ -623,4 +682,154 @@ fn answer_sim(
     let mut data = summary;
     data["completed"] = json!(true);
     Ok(outcome(data, "review_results", limits))
+}
+
+/// Longest read-back kept per question.
+const READ_BACK_MAX_CHARS: usize = 4_000;
+
+/// Grades a sat mock test (S53). Closed questions are graded by the engine
+/// from `response`; open questions take the host's rubric `score`. The
+/// read-back stays unverified until a later call with `confirm: true`.
+fn mock_grade(
+    args: &Map<String, Value>,
+    ctx: &ToolContext<'_>,
+    state: &State,
+    limits: BudgetLimits,
+) -> std::result::Result<ToolOutcome, ToolError> {
+    check_keys(
+        args,
+        &["action", "mock_id", "answers", "confirm", "progress"],
+        "lucubra_practice(mock_grade)",
+    )?;
+    let bad = |m: String| ToolError::new(ToolErrorCode::InvalidArguments, m);
+    let mock_id = req_str(
+        args,
+        "mock_id",
+        "provide 'mock_id' from lucubra_export(action=\"mock_test\")",
+    )?;
+    let mock = state.get(col::MOCK_TESTS, mock_id).ok_or_else(|| {
+        bad(format!(
+            "mock test '{mock_id}' was not exported in this workspace"
+        ))
+    })?;
+    let confirm =
+        crate::tools::opt_bool(args, "confirm", "confirm must be true or false")?.unwrap_or(false);
+    let answers = args.get("answers");
+    if answers.is_none() {
+        let Some(graded) = mock.get("graded").filter(|_| confirm) else {
+            return Err(bad(
+                "provide 'answers', or 'confirm: true' once the user has checked the read-back"
+                    .into(),
+            ));
+        };
+        let mut done = graded.clone();
+        done["mock_id"] = json!(mock_id);
+        done["verified"] = json!(true);
+        ctx.ws.append("mock_test.graded", done).map_err(ws_err)?;
+        return Ok(outcome(
+            json!({"mock_id": mock_id, "verified": true}),
+            "review_weak_units",
+            limits,
+        ));
+    }
+    let answers = answers.and_then(Value::as_array).ok_or_else(|| {
+        bad("answers must be an array of {n, read_back, response?, score?}".into())
+    })?;
+    let mut by_n: BTreeMap<u64, &Map<String, Value>> = BTreeMap::new();
+    for (i, a) in answers.iter().enumerate() {
+        let obj = a
+            .as_object()
+            .ok_or_else(|| bad(format!("answers[{i}] must be an object")))?;
+        let n = obj
+            .get("n")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| bad(format!("answers[{i}].n must be the question number")))?;
+        if by_n.insert(n, obj).is_some() {
+            return Err(bad(format!("question {n} is answered twice")));
+        }
+    }
+    let questions = mock
+        .get("questions")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for n in by_n.keys() {
+        if !questions
+            .iter()
+            .any(|q| q.get("n").and_then(Value::as_u64) == Some(*n))
+        {
+            return Err(bad(format!("question {n} is not on paper {mock_id}")));
+        }
+    }
+    let (mut breakdown, mut awarded_total, mut max_total) = (Vec::new(), 0.0, 0.0);
+    for q in &questions {
+        let n = q.get("n").and_then(Value::as_u64).unwrap_or(0);
+        let marks = q.get("marks").and_then(Value::as_f64).unwrap_or(0.0);
+        let item_id = text(q, "item_id").unwrap_or_default();
+        let item = state
+            .get(col::ITEMS, item_id)
+            .cloned()
+            .unwrap_or(Value::Null);
+        let answer = by_n.get(&n);
+        let read_back: Option<String> = answer
+            .and_then(|a| a.get("read_back"))
+            .and_then(Value::as_str)
+            .map(|s| s.chars().take(READ_BACK_MAX_CHARS).collect());
+        let (awarded, graded_by) = match answer {
+            None => (0.0, "unanswered"),
+            Some(a) => match a.get("response").map(|r| grade(&item, r)) {
+                Some(Graded::Engine { score, .. }) => {
+                    ((score * marks * 100.0).round() / 100.0, "engine")
+                }
+                _ => {
+                    let score = a.get("score").and_then(Value::as_f64).ok_or_else(|| {
+                        bad(format!("question {n} is an open question; give 'score' (0 to {marks}) from its rubric"))
+                    })?;
+                    if !(0.0..=marks).contains(&score) {
+                        return Err(bad(format!("question {n} score must be from 0 to {marks}")));
+                    }
+                    (score, "rubric")
+                }
+            },
+        };
+        awarded_total += awarded;
+        max_total += marks;
+        breakdown.push(json!({
+            "n": n, "item_id": item_id, "marks": marks, "awarded": awarded,
+            "graded_by": graded_by, "read_back": read_back,
+        }));
+    }
+    let round = |x: f64| (x * 100.0).round() / 100.0;
+    ctx.ws
+        .append(
+            "mock_test.graded",
+            json!({
+                "mock_id": mock_id,
+                "verified": confirm,
+                "breakdown": breakdown,
+                "awarded": round(awarded_total),
+                "total_marks": round(max_total),
+            }),
+        )
+        .map_err(ws_err)?;
+    let summary: Vec<Value> = breakdown
+        .iter()
+        .map(|b| json!({"n": b["n"], "awarded": b["awarded"], "marks": b["marks"], "graded_by": b["graded_by"]}))
+        .collect();
+    Ok(outcome(
+        json!({
+            "mock_id": mock_id,
+            "awarded": round(awarded_total),
+            "total_marks": round(max_total),
+            "verified": confirm,
+            "per_question": summary,
+            "note": if confirm { "read-back confirmed" } else { "the read-back is unverified; show it to the user, then call again with confirm: true" },
+        }),
+        if confirm {
+            "review_weak_units"
+        } else {
+            "confirm_read_back"
+        },
+        limits,
+    ))
 }
