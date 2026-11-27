@@ -1,0 +1,8 @@
+id = "viva"
+name = "Viva"
+summary = "Spoken-style questions with follow-ups that probe depth."
+step_order = ["question", "probe", "probe", "feedback"]
+question_every = 0
+depth = "deep"
+advance_on = "answer"
+hints = false
