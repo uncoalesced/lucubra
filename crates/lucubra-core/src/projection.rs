@@ -197,7 +197,27 @@ fn render_root(state: &State, subjects: &[String]) -> String {
 
 fn render_subject(state: &State, slug: &str, units: &[(String, &Value)]) -> String {
     let title = subject_title(state, slug);
-    let mut out = format!("# {title}\n\nBack to [[AGENTS|the root index]].\n\n## Exams\n\n");
+    let mut out = format!("# {title}\n\nBack to [[AGENTS|the root index]].\n\n");
+    let subject = state.get(col::SUBJECTS, slug);
+    if let Some(term) = subject.and_then(|s| text(s, "archived_term")) {
+        out.push_str(&format!("Archived at the close of {term}.\n\n"));
+    }
+    if let Some(term) = subject.and_then(|s| text(s, "carried_over_from")) {
+        out.push_str(&format!("Carried over from {term}.\n\n"));
+    }
+    let requires: Vec<&str> = subject
+        .and_then(|s| s.get("prerequisites"))
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    if !requires.is_empty() {
+        let links: Vec<String> = requires
+            .iter()
+            .map(|r| format!("[[subjects/{r}/agents_{r}|{}]]", subject_title(state, r)))
+            .collect();
+        out.push_str(&format!("Prerequisites: {}\n\n", links.join(", ")));
+    }
+    out.push_str("## Exams\n\n");
     let exams: Vec<_> = exams_for(state, slug).collect();
     if exams.is_empty() {
         out.push_str("No exams recorded.\n");
