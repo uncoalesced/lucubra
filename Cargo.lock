@@ -1179,6 +1179,7 @@ dependencies = [
  "lucubra-ingest",
  "lucubra-mcp",
  "lucubra-pack",
+ "serde_json",
  "tempfile",
  "tokio",
  "tokio-util",
