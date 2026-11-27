@@ -1171,7 +1171,7 @@ checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
 name = "lucubra-cli"
-version = "0.0.1"
+version = "1.0.0-beta.1"
 dependencies = [
  "clap",
  "lucubra-companion",
@@ -1188,7 +1188,7 @@ dependencies = [
 
 [[package]]
 name = "lucubra-companion"
-version = "0.0.1"
+version = "1.0.0-beta.1"
 dependencies = [
  "blake3",
  "lucubra-core",
@@ -1200,7 +1200,7 @@ dependencies = [
 
 [[package]]
 name = "lucubra-core"
-version = "0.0.1"
+version = "1.0.0-beta.1"
 dependencies = [
  "blake3",
  "directories",
@@ -1218,7 +1218,7 @@ dependencies = [
 
 [[package]]
 name = "lucubra-ingest"
-version = "0.0.1"
+version = "1.0.0-beta.1"
 dependencies = [
  "blake3",
  "calamine",
@@ -1235,7 +1235,7 @@ dependencies = [
 
 [[package]]
 name = "lucubra-mcp"
-version = "0.0.1"
+version = "1.0.0-beta.1"
 dependencies = [
  "blake3",
  "lucubra-core",
@@ -1256,7 +1256,7 @@ dependencies = [
 
 [[package]]
 name = "lucubra-pack"
-version = "0.0.1"
+version = "1.0.0-beta.1"
 dependencies = [
  "blake3",
  "lucubra-core",
