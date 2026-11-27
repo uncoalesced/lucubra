@@ -74,7 +74,7 @@ impl HostKind {
                 export_recipe: "Save file in workspace or attach/paste into Claude Project / Drive connector",
                 message_chars: None,
                 scheduled_tasks: Some(
-                    "Claude Desktop: ask Claude to create a scheduled task at your study time that calls lucubra_orient, then lucubra_plan(action=\"next\").",
+                    "Claude Desktop: ask Claude to create a scheduled task at your study time that calls lucubra_orient, then lucubra_plan(action=\"next\"). It runs only while the app is open and the computer is awake.",
                 ),
             },
             Self::ClaudeCode => HostProfile {
@@ -86,7 +86,7 @@ impl HostKind {
                 export_recipe: "Save file in workspace path; share via CLI/git or Drive sync",
                 message_chars: None,
                 scheduled_tasks: Some(
-                    "Claude Code: create a scheduled task (or use /loop) at your study time that calls lucubra_orient, then lucubra_plan(action=\"next\").",
+                    "Claude Code: /loop runs a prompt on a schedule only while this session is open, and recurring loops end after seven days. For a lasting reminder, use a Claude Desktop scheduled task that calls lucubra_orient, then lucubra_plan(action=\"next\").",
                 ),
             },
             Self::Codex => HostProfile {
