@@ -35,6 +35,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Preferences: `lucubra_profile action=preference` records learning and output preferences, projected to `PREFERENCES.md` (at most 600 tokens, user edits preserved). There is no field for a condition or diagnosis.
 - Reminders, off by default: opt in per type (study blocks, review days, exam countdown) to add calendar alarms to `schedule/lucubra-plan.ics`. Review days come from the review schedule. Claude Desktop and Claude Code also get a scheduled-task recipe in `lucubra_orient`.
 - Companion page: an easier-to-read font option, using fonts already on the device.
+- Grades: a grading scheme (a 10-point credit-weighted preset or custom bands), results per term with credits, SGPA and CGPA in `lucubra_status`, and subject credits and prerequisites in the profile.
+- Target CGPA: the grade and minimum marks each pending subject needs, or the best reachable value when the target is out of reach. While a target is set, the planner gives more weight to subjects with more credits (at most 1.5 times).
+- `lucubra term close --term <label> [--keep <subject>]` copies the generated files into `archive/<label>/`, carries failed subjects over with their mastery and items, keeps chosen subjects' review cards on a slow schedule and retires the rest. Your own files are not moved.
 - Community and policy documents: README, contributing guide, code of conduct, security policy, privacy statement, terms of use, accessibility statement and data handling policy.
 - Issue templates (bug report, feature request, host compatibility report) and a pull request template.
 
