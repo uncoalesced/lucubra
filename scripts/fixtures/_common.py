@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Engineered by uncoalesced
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.11"
 # dependencies = []
 # ///
 """Shared constants and deterministic packaging helpers for fixture generators."""
@@ -19,7 +19,7 @@ FIXTURES_ROOT = REPO_ROOT / "tests" / "fixtures"
 FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 FIXED_ISO_DATE = "2026-01-01T00:00:00Z"
 FIXED_PDF_DATE = "D:20260101000000Z"
-FIXED_DT = datetime.datetime(2026, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
+FIXED_DT = datetime.datetime(2026, 1, 1, 0, 0, 0, tzinfo=datetime.UTC)
 FIXED_DT_NAIVE = datetime.datetime(2026, 1, 1, 0, 0, 0)
 
 MALAYALAM_TEXT = (
