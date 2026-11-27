@@ -6,6 +6,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use serde_json::{Value, json};
 
@@ -84,6 +85,9 @@ pub struct Workspace {
     data_dir: PathBuf,
     dev: String,
     clock: Box<dyn Clock + Send + Sync>,
+    /// The workspace id, read once: it never changes after `workspace.initialized`,
+    /// and reading it replays the whole log.
+    id: OnceLock<String>,
 }
 
 impl Workspace {
@@ -97,6 +101,7 @@ impl Workspace {
             root,
             data_dir: data_dir.to_path_buf(),
             clock: Box::new(SystemClock),
+            id: OnceLock::new(),
         })
     }
 
@@ -196,6 +201,9 @@ impl Workspace {
 
     /// The workspace id from `workspace.initialized`.
     pub fn workspace_id(&self) -> Result<String> {
+        if let Some(id) = self.id.get() {
+            return Ok(id.clone());
+        }
         let replay = self.replay()?;
         let id = replay
             .state
@@ -205,7 +213,7 @@ impl Workspace {
         if !is_ulid(id) {
             return Err(Error::Invalid(format!("workspace id '{id}' is not a ULID")));
         }
-        Ok(id.to_owned())
+        Ok(self.id.get_or_init(|| id.to_owned()).clone())
     }
 
     /// This workspace's cache directory in the data directory.
