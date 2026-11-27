@@ -175,6 +175,7 @@ pub fn execute(
                 "questions": lucubra_core::domain::pending_questions(state),
             })),
             "recommendations": lucubra_core::domain::recommendations(state),
+            "grades": lucubra_core::grades::summary(state),
             "needs_user": questions,
         }),
         next,
