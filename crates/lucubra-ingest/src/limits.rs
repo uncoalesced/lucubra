@@ -21,3 +21,19 @@ pub const MAX_TEXT_BYTES: usize = 64 << 20;
 pub const RENDER_LONG_EDGE: u32 = 1600;
 /// A PDF page with fewer non-whitespace characters than this needs vision.
 pub const VISION_MIN_CHARS: usize = 40;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn limits_are_consistent() {
+        assert!(MAX_ZIP_READ_BYTES <= MAX_ZIP_DECLARED_BYTES);
+        assert!(MAX_ZIP_DECLARED_BYTES < MAX_FILE_BYTES);
+        assert!(ZIP_RATIO_FLOOR_BYTES < MAX_ZIP_READ_BYTES);
+        assert!(MAX_ZIP_RATIO > 1 && MAX_ZIP_ENTRIES > 0);
+        assert!((MAX_TEXT_BYTES as u64) < MAX_FILE_BYTES);
+        assert!(RENDER_LONG_EDGE >= 1000 && VISION_MIN_CHARS > 0);
+    }
+}

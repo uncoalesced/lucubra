@@ -18,9 +18,27 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - uses: astral-sh/setup-uv@v7
+      # The corpus and worker tests skip without the project venv.
+      - run: uv sync --locked
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+
+  crate-isolation:
+    # Each crate's suite on its own, so workspace feature unification cannot
+    # hide a missing dev-dependency or feature.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [lucubra-core, lucubra-ingest, lucubra-mcp, lucubra-pack, lucubra-companion, lucubra-cli]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v7
+      - run: uv sync --locked
+      - run: cargo test -p ${{ matrix.crate }}
 
   deny:
     runs-on: ubuntu-latest

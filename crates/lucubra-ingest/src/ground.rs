@@ -123,3 +123,125 @@ pub fn ground_sources(
         "verified"
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lucubra_core::Workspace;
+    use serde_json::json;
+
+    const A: &str = "aaaa1111";
+    const B: &str = "aaaa2222";
+
+    struct Fx {
+        _root: tempfile::TempDir,
+        _data: tempfile::TempDir,
+        state: State,
+        index: Index,
+    }
+
+    fn fixture(transcript_verified: bool) -> Fx {
+        let root = tempfile::tempdir().unwrap();
+        let data = tempfile::tempdir().unwrap();
+        let ws = Workspace::init(root.path(), data.path()).unwrap();
+        for (path, hash) in [("inbox/a.md", A), ("inbox/b.png", B)] {
+            ws.append(
+                "file.seen",
+                json!({"path": path, "hash": hash, "bytes": 10}),
+            )
+            .unwrap();
+        }
+        ws.append(
+            "transcript.saved",
+            json!({"hash": B, "verified": transcript_verified}),
+        )
+        .unwrap();
+        let mut index = Index::open(&data.path().join("index.db")).unwrap();
+        index
+            .upsert_chunk(A, "h:1", "Snell law governs refraction at a boundary.")
+            .unwrap();
+        index.upsert_chunk(A, "h:2", "Lenses focus light.").unwrap();
+        index
+            .upsert_chunk(B, "img:transcript", "Handwritten lens equation.")
+            .unwrap();
+        let state = ws.replay().unwrap().state;
+        Fx {
+            _root: root,
+            _data: data,
+            state,
+            index,
+        }
+    }
+
+    #[test]
+    fn resolve_hash_takes_full_or_unique_prefix() {
+        let fx = fixture(false);
+        assert_eq!(resolve_hash(&fx.state, A).unwrap(), A);
+        assert_eq!(resolve_hash(&fx.state, " aaaa1 ").unwrap(), A);
+        assert!(
+            resolve_hash(&fx.state, "aaaa")
+                .unwrap_err()
+                .contains("more than one")
+        );
+        assert!(
+            resolve_hash(&fx.state, "ffff")
+                .unwrap_err()
+                .contains("no file")
+        );
+        assert!(resolve_hash(&fx.state, "  ").unwrap_err().contains("empty"));
+    }
+
+    #[test]
+    fn ground_in_file_searches_every_chunk() {
+        let fx = fixture(false);
+        ground_in_file(&fx.index, A, "lenses focus light").unwrap();
+        assert!(ground_in_file(&fx.index, A, "magnets attract iron").is_err());
+        let none = ground_in_file(&fx.index, "cccc", "anything").unwrap_err();
+        assert!(none.contains("no indexed text"), "{none}");
+    }
+
+    #[test]
+    fn ground_sources_labels_verified_and_transcript_only() {
+        let fx = fixture(false);
+        let chunk =
+            json!({"file_hash": A, "location": "h:1", "anchor": "Snell law governs refraction"});
+        assert_eq!(
+            ground_sources(&fx.state, Some(&fx.index), std::slice::from_ref(&chunk)),
+            Ok("verified")
+        );
+        let tr = json!({"file_hash": B, "location": "img:transcript", "anchor": "lens equation"});
+        assert_eq!(
+            ground_sources(&fx.state, Some(&fx.index), std::slice::from_ref(&tr)),
+            Ok("unverified_transcript")
+        );
+        assert_eq!(
+            ground_sources(&fx.state, Some(&fx.index), &[tr.clone(), chunk.clone()]),
+            Ok("verified")
+        );
+        let verified = fixture(true);
+        assert_eq!(
+            ground_sources(&verified.state, Some(&verified.index), &[tr]),
+            Ok("verified")
+        );
+    }
+
+    #[test]
+    fn ground_sources_reports_the_failing_source() {
+        let fx = fixture(false);
+        assert!(
+            ground_sources(&fx.state, None, &[])
+                .unwrap_err()
+                .contains("unavailable")
+        );
+        let missing_loc = json!({"file_hash": A, "location": "h:9", "anchor": "Snell"});
+        let err = ground_sources(&fx.state, Some(&fx.index), &[missing_loc]).unwrap_err();
+        assert!(
+            err.starts_with("sources[0]:") && err.contains("does not exist"),
+            "{err}"
+        );
+        let wrong = json!({"file_hash": A, "location": "h:1", "anchor": "magnets attract iron"});
+        let ok = json!({"file_hash": A, "location": "h:2", "anchor": "Lenses focus light"});
+        let err = ground_sources(&fx.state, Some(&fx.index), &[ok, wrong]).unwrap_err();
+        assert!(err.starts_with("sources[1]:"), "{err}");
+    }
+}

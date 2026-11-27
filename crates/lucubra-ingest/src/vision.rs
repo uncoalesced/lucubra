@@ -234,3 +234,77 @@ pub fn render_pending_vision(ws: &Workspace, worker: &mut Supervisor) -> Result<
     }
     Ok(report)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn transcript_paths_follow_the_source_layout() {
+        assert_eq!(
+            transcript_rel_path("subjects/phy/optics/sources/lec.pdf", Some(3)),
+            "subjects/phy/optics/notes/lec.pdf.p3.transcript.md"
+        );
+        assert_eq!(
+            transcript_rel_path("sources/lec.pdf", Some(1)),
+            "notes/lec.pdf.p1.transcript.md"
+        );
+        assert_eq!(
+            transcript_rel_path("inbox/scan.pdf", Some(2)),
+            "notes/scan.pdf.p2.transcript.md"
+        );
+        assert_eq!(
+            transcript_rel_path("inbox/photo.jpg", None),
+            "inbox/photo.jpg.transcript.md"
+        );
+    }
+
+    #[test]
+    fn pending_pages_exclude_transcribed_ones() {
+        let root = tempfile::tempdir().unwrap();
+        let data = tempfile::tempdir().unwrap();
+        let ws = Workspace::init(root.path(), data.path()).unwrap();
+        let ev = |kind: &str, v: serde_json::Value| {
+            ws.append(kind, v).unwrap();
+        };
+        ev(
+            "file.seen",
+            json!({"path": "inbox/a.pdf", "hash": "pdf1", "bytes": 1}),
+        );
+        ev(
+            "file.seen",
+            json!({"path": "inbox/b.png", "hash": "img1", "bytes": 1}),
+        );
+        ev(
+            "file.seen",
+            json!({"path": "inbox/c.pdf", "hash": "bad1", "bytes": 1}),
+        );
+        let state = ws.replay().unwrap().state;
+        assert!(
+            pending_vision_pages(&state, "pdf1").is_empty(),
+            "not extracted yet"
+        );
+        ev(
+            "file.extracted",
+            json!({"hash": "pdf1", "format": "pdf", "needs_vision": [1, 2, 4]}),
+        );
+        ev(
+            "file.extracted",
+            json!({"hash": "img1", "format": "image", "needs_vision": [1]}),
+        );
+        ev(
+            "file.failed",
+            json!({"hash": "bad1", "outcome": "failed", "needs_vision": [1]}),
+        );
+        ev("transcript.saved", json!({"hash": "pdf1", "page": 2}));
+        let state = ws.replay().unwrap().state;
+        assert_eq!(pending_vision_pages(&state, "pdf1"), vec![1, 4]);
+        assert_eq!(pending_vision_pages(&state, "img1"), vec![1]);
+        assert!(pending_vision_pages(&state, "bad1").is_empty());
+        assert!(pending_vision_pages(&state, "missing").is_empty());
+        ev("transcript.saved", json!({"hash": "img1"}));
+        let state = ws.replay().unwrap().state;
+        assert!(pending_vision_pages(&state, "img1").is_empty());
+    }
+}

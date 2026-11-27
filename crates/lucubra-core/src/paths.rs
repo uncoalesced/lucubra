@@ -105,3 +105,59 @@ pub fn resolve_workspace_path(
     let joined = clean_parts.iter().fold(canon_root, |acc, p| acc.join(p));
     Ok((rel_str, joined))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reserved_windows_names_are_detected() {
+        for name in ["CON", "nul.txt", "aux", "com1", "LPT9.log"] {
+            assert!(is_reserved_windows_component(name), "{name}");
+        }
+        for name in ["console", "com", "com10", "lpt", "notes.md", "nullify"] {
+            assert!(!is_reserved_windows_component(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn bad_paths_are_refused_with_a_reason() {
+        let root = tempfile::tempdir().unwrap();
+        for (raw, why) in [
+            ("", "empty"),
+            ("a\0b", "NUL"),
+            ("/etc/passwd", "absolute"),
+            ("C:/x", "drive"),
+            ("../x", "traversal"),
+            ("a/../../x", "traversal"),
+            (".lucubra/cache", ".lucubra"),
+            (".LUCUBRA/x", ".lucubra"),
+            ("notes/con.txt", "reserved"),
+            (".", "name a file"),
+        ] {
+            let err = resolve_workspace_path(root.path(), raw).unwrap_err();
+            assert!(err.contains(why), "{raw:?}: {err}");
+        }
+    }
+
+    #[test]
+    fn good_paths_are_normalised_and_may_not_exist_yet() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir(root.path().join("subjects")).unwrap();
+        let (rel, abs) =
+            resolve_workspace_path(root.path(), r" .\subjects\physics/unit.md ").unwrap();
+        assert_eq!(rel, "subjects/physics/unit.md");
+        assert!(abs.starts_with(root.path().canonicalize().unwrap()));
+        assert!(abs.ends_with("subjects/physics/unit.md"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinks_are_not_followed() {
+        let root = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(outside.path(), root.path().join("link")).unwrap();
+        let err = resolve_workspace_path(root.path(), "link/secret").unwrap_err();
+        assert!(err.contains("symlink"), "{err}");
+    }
+}

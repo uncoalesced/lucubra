@@ -1,0 +1,4 @@
+pigment,wavelength_nm,absorbance
+Chlorophyll a,430,0.82
+Chlorophyll a,662,0.74
+Carotenoid,450,0.51

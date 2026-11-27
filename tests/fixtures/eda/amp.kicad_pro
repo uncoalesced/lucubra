@@ -1,0 +1,30 @@
+{
+  "board": {
+    "design_settings": {
+      "defaults": {
+        "board_outline_line_width": 0.1
+      }
+    },
+    "ipc2581": {},
+    "layer_presets": []
+  },
+  "meta": {
+    "filename": "amp.kicad_pro",
+    "version": 1
+  },
+  "net_settings": {
+    "classes": [
+      {
+        "name": "Default",
+        "clearance": 0.2,
+        "track_width": 0.25
+      }
+    ]
+  },
+  "sheets": [
+    [
+      "10000000-0000-4000-8000-000000000001",
+      "Root"
+    ]
+  ]
+}

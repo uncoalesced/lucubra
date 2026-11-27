@@ -1,0 +1,1775 @@
+{
+  "schema": 1,
+  "files": [
+    {
+      "path": "cad/drawing.dxf",
+      "format": "dxf",
+      "sha256": "f69a456b977042b609251f44b3a97d6977d282ac553e1a1331281eb59382afe6",
+      "bytes": 38432,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_cad.py",
+      "scenarios": [
+        "S07"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "layers": [
+          "Walls",
+          "Dimensions"
+        ],
+        "blocks": [
+          "Valve"
+        ],
+        "contains": [
+          "North Wall 4200 mm",
+          "Structural partition",
+          "Check clearance"
+        ]
+      },
+      "notes": "R2010 DXF with Walls/Dimensions layers, Valve block, TEXT, MTEXT, and linear dim"
+    },
+    {
+      "path": "classify/ambiguous-01.pdf",
+      "format": "pdf",
+      "sha256": "50e63e9cd28c239b8b73116ec612e64a3e013ff8fbe80c4ef1bcaaa738fe2f41",
+      "bytes": 1562,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": null,
+        "course_code": null
+      },
+      "notes": "host batch"
+    },
+    {
+      "path": "classify/ambiguous-02.pdf",
+      "format": "pdf",
+      "sha256": "0803d1deabbb5e38f410fba978cc9db984cc19ff279481e16133a7802049f6d2",
+      "bytes": 1563,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": null,
+        "course_code": null
+      },
+      "notes": "host batch"
+    },
+    {
+      "path": "classify/chem210-note-01.pdf",
+      "format": "pdf",
+      "sha256": "f1df9d74e9868017bced56364e93719301fb4a7578ff6682f33ef40ec3b57973",
+      "bytes": 1557,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "chem210",
+        "course_code": "CHEM210"
+      },
+      "notes": "Clear CHEM210 fixture (signal=filename)"
+    },
+    {
+      "path": "classify/chem210-note-04.pdf",
+      "format": "pdf",
+      "sha256": "4895754423ef97369e74ece8f9d3a5a5779585e8ae845f4b8da75c9a7d0e8c4b",
+      "bytes": 1557,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "chem210",
+        "course_code": "CHEM210"
+      },
+      "notes": "Clear CHEM210 fixture (signal=filename)"
+    },
+    {
+      "path": "classify/chem210-note-07.pdf",
+      "format": "pdf",
+      "sha256": "a687170d648fc4f71b014b657fb148a16472ba38bb0fe3a84db2bb79e7b24f77",
+      "bytes": 1557,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "chem210",
+        "course_code": "CHEM210"
+      },
+      "notes": "Clear CHEM210 fixture (signal=filename)"
+    },
+    {
+      "path": "classify/chem210-note-10.pdf",
+      "format": "pdf",
+      "sha256": "3edaa30ee8804e8cf68d57fd8ff0c3969dfedf488f298b1e2ba840c990daf802",
+      "bytes": 1558,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "chem210",
+        "course_code": "CHEM210"
+      },
+      "notes": "Clear CHEM210 fixture (signal=filename)"
+    },
+    {
+      "path": "classify/cs302-note-01.pdf",
+      "format": "pdf",
+      "sha256": "fd162066d8a836e4772578e0d72d41525c59df17b13dec765561c00355dffe49",
+      "bytes": 1556,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "cs302",
+        "course_code": "CS302"
+      },
+      "notes": "Clear CS302 fixture (signal=filename)"
+    },
+    {
+      "path": "classify/cs302-note-04.pdf",
+      "format": "pdf",
+      "sha256": "562a1552c84970d717409de9d412674ea4641076da801820793ec7f247c203cf",
+      "bytes": 1556,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "cs302",
+        "course_code": "CS302"
+      },
+      "notes": "Clear CS302 fixture (signal=filename)"
+    },
+    {
+      "path": "classify/cs302-note-07.pdf",
+      "format": "pdf",
+      "sha256": "64a2805173025388317086ab7dd43a1267d03ff692fca0f3a6b96d24f59e2cbc",
+      "bytes": 1556,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "cs302",
+        "course_code": "CS302"
+      },
+      "notes": "Clear CS302 fixture (signal=filename)"
+    },
+    {
+      "path": "classify/econ104-note-01.pdf",
+      "format": "pdf",
+      "sha256": "c68273c055fd0e91a4b5c649ca49795c4c8167bd8cf69fe69b62c5d355eb7343",
+      "bytes": 1546,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "econ104",
+        "course_code": "ECON104"
+      },
+      "notes": "Clear ECON104 fixture (signal=filename)"
+    },
+    {
+      "path": "classify/econ104-note-04.pdf",
+      "format": "pdf",
+      "sha256": "1adff5e4e1823a2ea5b4e231115332bd132a14b7346c2dc297b5434c828a5b8f",
+      "bytes": 1546,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "econ104",
+        "course_code": "ECON104"
+      },
+      "notes": "Clear ECON104 fixture (signal=filename)"
+    },
+    {
+      "path": "classify/econ104-note-07.pdf",
+      "format": "pdf",
+      "sha256": "ead7be9cd62c572a147a7d167576d2c8c0da7dbf9c79b30758ad5d3aa0123172",
+      "bytes": 1546,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "econ104",
+        "course_code": "ECON104"
+      },
+      "notes": "Clear ECON104 fixture (signal=filename)"
+    },
+    {
+      "path": "classify/econ104-note-10.pdf",
+      "format": "pdf",
+      "sha256": "49fee226334d0c83dc09e90f43c767979af971406f558afe2073e7fe88edc6e3",
+      "bytes": 1547,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "econ104",
+        "course_code": "ECON104"
+      },
+      "notes": "Clear ECON104 fixture (signal=filename)"
+    },
+    {
+      "path": "classify/handout-02.pdf",
+      "format": "pdf",
+      "sha256": "b93ba076631e83a7da3d2640937516268edae00068d190698dd117fe6a55e071",
+      "bytes": 1547,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "stat201",
+        "course_code": "STAT201"
+      },
+      "notes": "Clear STAT201 fixture (signal=title)"
+    },
+    {
+      "path": "classify/handout-05.pdf",
+      "format": "pdf",
+      "sha256": "b93ba076631e83a7da3d2640937516268edae00068d190698dd117fe6a55e071",
+      "bytes": 1547,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "stat201",
+        "course_code": "STAT201"
+      },
+      "notes": "Clear STAT201 fixture (signal=title)"
+    },
+    {
+      "path": "classify/handout-08.pdf",
+      "format": "pdf",
+      "sha256": "b93ba076631e83a7da3d2640937516268edae00068d190698dd117fe6a55e071",
+      "bytes": 1547,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "stat201",
+        "course_code": "STAT201"
+      },
+      "notes": "Clear STAT201 fixture (signal=title)"
+    },
+    {
+      "path": "classify/handout-11.pdf",
+      "format": "pdf",
+      "sha256": "47769f59d27ea0c172715be2e5f11488614e0df828ed1268ceff17e2b8cd06f6",
+      "bytes": 1549,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "cs302",
+        "course_code": "CS302"
+      },
+      "notes": "Clear CS302 fixture (signal=title)"
+    },
+    {
+      "path": "classify/handout-14.pdf",
+      "format": "pdf",
+      "sha256": "47769f59d27ea0c172715be2e5f11488614e0df828ed1268ceff17e2b8cd06f6",
+      "bytes": 1549,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "cs302",
+        "course_code": "CS302"
+      },
+      "notes": "Clear CS302 fixture (signal=title)"
+    },
+    {
+      "path": "classify/handout-17.pdf",
+      "format": "pdf",
+      "sha256": "47769f59d27ea0c172715be2e5f11488614e0df828ed1268ceff17e2b8cd06f6",
+      "bytes": 1549,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "cs302",
+        "course_code": "CS302"
+      },
+      "notes": "Clear CS302 fixture (signal=title)"
+    },
+    {
+      "path": "classify/handout-20.pdf",
+      "format": "pdf",
+      "sha256": "187c0c5048a63a968db950ae59eb599c2b266743cae0ec44d1dd8ce9f35d395f",
+      "bytes": 1543,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "econ104",
+        "course_code": "ECON104"
+      },
+      "notes": "Clear ECON104 fixture (signal=title)"
+    },
+    {
+      "path": "classify/handout-23.pdf",
+      "format": "pdf",
+      "sha256": "187c0c5048a63a968db950ae59eb599c2b266743cae0ec44d1dd8ce9f35d395f",
+      "bytes": 1543,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "econ104",
+        "course_code": "ECON104"
+      },
+      "notes": "Clear ECON104 fixture (signal=title)"
+    },
+    {
+      "path": "classify/handout-26.pdf",
+      "format": "pdf",
+      "sha256": "187c0c5048a63a968db950ae59eb599c2b266743cae0ec44d1dd8ce9f35d395f",
+      "bytes": 1543,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "econ104",
+        "course_code": "ECON104"
+      },
+      "notes": "Clear ECON104 fixture (signal=title)"
+    },
+    {
+      "path": "classify/handout-30.pdf",
+      "format": "pdf",
+      "sha256": "dbad8c878df866e3e1adc88e80f612c1175c17df6c4768a70c540d27374f4f5e",
+      "bytes": 1551,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "chem210",
+        "course_code": "CHEM210"
+      },
+      "notes": "Clear CHEM210 fixture (signal=title)"
+    },
+    {
+      "path": "classify/handout-33.pdf",
+      "format": "pdf",
+      "sha256": "dbad8c878df866e3e1adc88e80f612c1175c17df6c4768a70c540d27374f4f5e",
+      "bytes": 1551,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "chem210",
+        "course_code": "CHEM210"
+      },
+      "notes": "Clear CHEM210 fixture (signal=title)"
+    },
+    {
+      "path": "classify/handout-36.pdf",
+      "format": "pdf",
+      "sha256": "dbad8c878df866e3e1adc88e80f612c1175c17df6c4768a70c540d27374f4f5e",
+      "bytes": 1551,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "chem210",
+        "course_code": "CHEM210"
+      },
+      "notes": "Clear CHEM210 fixture (signal=title)"
+    },
+    {
+      "path": "classify/profile.json",
+      "format": "unknown",
+      "sha256": "20458b87b2e32e60df3bfc4f78967e9ccbc5e651da5c0b5e7057b1647aa97fee",
+      "bytes": 995,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {},
+      "notes": "S03 subject profile configuration (four subjects, five keywords each)"
+    },
+    {
+      "path": "classify/reading-03.pdf",
+      "format": "pdf",
+      "sha256": "2581e736f60d05dd0e2eceea01bd0f28d77170a358ac8c437a4fb4b201d8818d",
+      "bytes": 1535,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "stat201",
+        "course_code": "STAT201"
+      },
+      "notes": "Clear STAT201 fixture (signal=first_line)"
+    },
+    {
+      "path": "classify/reading-06.pdf",
+      "format": "pdf",
+      "sha256": "4d6a5ac58d62c7b0ebb9e34c95099a0f7f62ebb25e9349a44ccb5f57c858bbc2",
+      "bytes": 1535,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "stat201",
+        "course_code": "STAT201"
+      },
+      "notes": "Clear STAT201 fixture (signal=first_line)"
+    },
+    {
+      "path": "classify/reading-09.pdf",
+      "format": "pdf",
+      "sha256": "32cbb54362db359f947b91b1f537249a77a9145045f5239d5773bb68d8739c46",
+      "bytes": 1535,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "stat201",
+        "course_code": "STAT201"
+      },
+      "notes": "Clear STAT201 fixture (signal=first_line)"
+    },
+    {
+      "path": "classify/reading-12.pdf",
+      "format": "pdf",
+      "sha256": "e3d26fac913421676b2d2655b824d2bbbe5e53e512447affe0861811478c88a7",
+      "bytes": 1542,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "cs302",
+        "course_code": "CS302"
+      },
+      "notes": "Clear CS302 fixture (signal=first_line)"
+    },
+    {
+      "path": "classify/reading-15.pdf",
+      "format": "pdf",
+      "sha256": "1a0a7c6058c17da68c5024948769ecdcdfc846c5726bcfeedb15c5061592a442",
+      "bytes": 1542,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "cs302",
+        "course_code": "CS302"
+      },
+      "notes": "Clear CS302 fixture (signal=first_line)"
+    },
+    {
+      "path": "classify/reading-18.pdf",
+      "format": "pdf",
+      "sha256": "40013b748879e33928a59613a251ce5d43f98b011ab73089e2fc2b0ee99d3e86",
+      "bytes": 1542,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "cs302",
+        "course_code": "CS302"
+      },
+      "notes": "Clear CS302 fixture (signal=first_line)"
+    },
+    {
+      "path": "classify/reading-21.pdf",
+      "format": "pdf",
+      "sha256": "936439a7d92b70e5f26afbb4692f67c7f010d3f99e414ad581f2da277a0e12a5",
+      "bytes": 1541,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "econ104",
+        "course_code": "ECON104"
+      },
+      "notes": "Clear ECON104 fixture (signal=first_line)"
+    },
+    {
+      "path": "classify/reading-24.pdf",
+      "format": "pdf",
+      "sha256": "b52bac8218964267e7efa4dd2a8e5c4aacc4c7f283618cd92678353c466bb58d",
+      "bytes": 1541,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "econ104",
+        "course_code": "ECON104"
+      },
+      "notes": "Clear ECON104 fixture (signal=first_line)"
+    },
+    {
+      "path": "classify/reading-27.pdf",
+      "format": "pdf",
+      "sha256": "aa8ca0f2fd7cd96d19c756aeaed132dc451c44e47a2cd1e44d9dd0576be03f0d",
+      "bytes": 1541,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "econ104",
+        "course_code": "ECON104"
+      },
+      "notes": "Clear ECON104 fixture (signal=first_line)"
+    },
+    {
+      "path": "classify/reading-31.pdf",
+      "format": "pdf",
+      "sha256": "f03d056f91befe68cb50f3f6038ddc3fc5656822f0f816bec624f774485d88fe",
+      "bytes": 1547,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "chem210",
+        "course_code": "CHEM210"
+      },
+      "notes": "Clear CHEM210 fixture (signal=first_line)"
+    },
+    {
+      "path": "classify/reading-34.pdf",
+      "format": "pdf",
+      "sha256": "0aa20a6cbb12b2db5a39c05fd18628d1c259c69bfd4fb3fde3d31bce4fa7bc9b",
+      "bytes": 1547,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "chem210",
+        "course_code": "CHEM210"
+      },
+      "notes": "Clear CHEM210 fixture (signal=first_line)"
+    },
+    {
+      "path": "classify/reading-37.pdf",
+      "format": "pdf",
+      "sha256": "ea950017cb6f48337a185e3cacc6661c59c483d0b2a59a90d23a0fba92d72867",
+      "bytes": 1547,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "chem210",
+        "course_code": "CHEM210"
+      },
+      "notes": "Clear CHEM210 fixture (signal=first_line)"
+    },
+    {
+      "path": "classify/stat201-note-01.pdf",
+      "format": "pdf",
+      "sha256": "31410a6a6f6aa3cf4446dd9f98375f7d65eb208e8c548d08e425300f686ccaf8",
+      "bytes": 1550,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "stat201",
+        "course_code": "STAT201"
+      },
+      "notes": "Clear STAT201 fixture (signal=filename)"
+    },
+    {
+      "path": "classify/stat201-note-04.pdf",
+      "format": "pdf",
+      "sha256": "32a08bfab296d0dc459d536e81908768958166c554f597958afec671763c39c6",
+      "bytes": 1550,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "stat201",
+        "course_code": "STAT201"
+      },
+      "notes": "Clear STAT201 fixture (signal=filename)"
+    },
+    {
+      "path": "classify/stat201-note-07.pdf",
+      "format": "pdf",
+      "sha256": "538078dd1f570b03e6ba38241ce4cbdf08019f3482f6fe6ca288a20d60674c4e",
+      "bytes": 1550,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_classify.py",
+      "scenarios": [
+        "S03"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "subject": "stat201",
+        "course_code": "STAT201"
+      },
+      "notes": "Clear STAT201 fixture (signal=filename)"
+    },
+    {
+      "path": "csv/data-crlf-bom.csv",
+      "format": "csv",
+      "sha256": "f6f452d4c28b084d88fe234e62b9c8aab3cf6926c321af663d3bba3714b338e2",
+      "bytes": 87,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_csv.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "contains": [
+          "region",
+          "mean_temp_c",
+          "Coastal Plain"
+        ]
+      },
+      "notes": "UTF-8 with BOM and CRLF line endings"
+    },
+    {
+      "path": "csv/data.csv",
+      "format": "csv",
+      "sha256": "e0d8aa87b76951a34015ad5b88af56029f49c540917ea53dfca102b9e9b97eea",
+      "bytes": 99,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_csv.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "contains": [
+          "wavelength_nm",
+          "absorbance",
+          "Chlorophyll a"
+        ]
+      },
+      "notes": "UTF-8 LF comma-separated spectroscopy table"
+    },
+    {
+      "path": "csv/data.tsv",
+      "format": "tsv",
+      "sha256": "5782458b619cd9dd8abb1575f1d58cc83b0a84d331f6c87097fa485b9e420ae7",
+      "bytes": 69,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_csv.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "contains": [
+          "trial_id",
+          "voltage_v",
+          "current_ma"
+        ]
+      },
+      "notes": "UTF-8 LF tab-separated circuit measurement table"
+    },
+    {
+      "path": "docx/bomb-honest.docx",
+      "format": "docx",
+      "sha256": "a7dbab8d995486b7379b8aefaf668db6474f796e991cecc3e91f728df8ab6b89",
+      "bytes": 1045171,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_docx.py",
+      "scenarios": [
+        "S30"
+      ],
+      "expect": {
+        "outcome": "failed",
+        "code": "limit_exceeded"
+      },
+      "notes": "Valid DOCX with an extra 1 GiB zero entry declared truthfully in zip headers"
+    },
+    {
+      "path": "docx/bomb-lying.docx",
+      "format": "docx",
+      "sha256": "b2140c751ad8e5cee01ae231babaee977dad3ce972103eeb0d8b05fc04347f2f",
+      "bytes": 653805,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_docx.py",
+      "scenarios": [
+        "S30"
+      ],
+      "expect": {
+        "outcome": "failed",
+        "code": "limit_exceeded"
+      },
+      "notes": "a reader that stops at the declared size reports corrupt"
+    },
+    {
+      "path": "docx/headings-table.docx",
+      "format": "docx",
+      "sha256": "967eb625cf25ed6ef3cbb61f34f6a78672fdb24ba5c9ae2493245e22ef67f23b",
+      "bytes": 37074,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_docx.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "contains": [
+          "Cell Structure Overview",
+          "Membrane Transport",
+          "Organelle",
+          "Mitochondrion",
+          "ATP synthesis"
+        ]
+      },
+      "notes": "Heading 1, Heading 2, study paragraphs, and a 4x2 organelle table"
+    },
+    {
+      "path": "eda/amp.kicad_pcb",
+      "format": "kicad_pcb",
+      "sha256": "549622b165f72c4403764ced6b5a4cc5f5fa1e4859daaefb87feedf82c624dd1",
+      "bytes": 1163,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_eda.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "components": [
+          {
+            "ref": "R1",
+            "value": "10k"
+          },
+          {
+            "ref": "R2",
+            "value": "20k"
+          },
+          {
+            "ref": "C1",
+            "value": "100nF"
+          },
+          {
+            "ref": "U1",
+            "value": "OPA2134"
+          }
+        ],
+        "nets": [
+          "VIN",
+          "VOUT",
+          "GND"
+        ]
+      },
+      "notes": "Minimal KiCad 8 PCB layout matching amp.kicad_sch"
+    },
+    {
+      "path": "eda/amp.kicad_pro",
+      "format": "kicad_pro",
+      "sha256": "6a0a7d846ff28c930f4237593689c4f363628123c8a6d245b1e3aac133731988",
+      "bytes": 466,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_eda.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "contains": [
+          "amp.kicad_pro"
+        ]
+      },
+      "notes": "Minimal KiCad 8 JSON project metadata"
+    },
+    {
+      "path": "eda/amp.kicad_sch",
+      "format": "kicad_sch",
+      "sha256": "f748f0d7d12f352dbd348d817a001781d07f5c6e3661bbcb63bdb472a2633ce6",
+      "bytes": 1060,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_eda.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "components": [
+          {
+            "ref": "R1",
+            "value": "10k"
+          },
+          {
+            "ref": "R2",
+            "value": "20k"
+          },
+          {
+            "ref": "C1",
+            "value": "100nF"
+          },
+          {
+            "ref": "U1",
+            "value": "OPA2134"
+          }
+        ],
+        "nets": [
+          "VIN",
+          "VOUT",
+          "GND"
+        ]
+      },
+      "notes": "Minimal KiCad 8 schematic with op-amp and passive feedback components"
+    },
+    {
+      "path": "eda/board.gtl",
+      "format": "gerber",
+      "sha256": "5c4f3c20da8be5226c3cd8afdde771df1f8ca45308558c9aa01265ac60cc495b",
+      "bytes": 152,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_eda.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "contains": [
+          "Copper,L1,Top"
+        ]
+      },
+      "notes": "RS-274X Gerber top copper layer with format and file function attributes"
+    },
+    {
+      "path": "eda/filter.asc",
+      "format": "ltspice_asc",
+      "sha256": "bae5002bda2d6d656415211dc39902e904c50be92c06dda7b221d7fd82ea0846",
+      "bytes": 283,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_eda.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "components": [
+          "R1",
+          "C1"
+        ],
+        "analyses": [
+          ".ac"
+        ]
+      },
+      "notes": "LTspice ASCII schematic with low-pass RC filter and AC sweep"
+    },
+    {
+      "path": "eda/rc.cir",
+      "format": "spice",
+      "sha256": "f8a4fc48a2d967e39b5593e2ae0f9122f4d14ef7f30e7ccd9b7f6e86bf8c72d5",
+      "bytes": 141,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_eda.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "components": [
+          "V1",
+          "R1",
+          "C1"
+        ],
+        "analyses": [
+          ".tran",
+          ".ac"
+        ]
+      },
+      "notes": "SPICE netlist with transient and AC sweep commands"
+    },
+    {
+      "path": "image/diagram.jpg",
+      "format": "image",
+      "sha256": "dcf2d070354ac72c9d15a3a85fa0d793433b5383205a94817c9f3d6e44379d0f",
+      "bytes": 15203,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_image.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "needs_vision": [
+          1
+        ]
+      },
+      "notes": "Synthetic inclined-plane mechanics diagram as JPEG"
+    },
+    {
+      "path": "image/photo-notes.png",
+      "format": "image",
+      "sha256": "1141f99842ce463e945dfbeac714b594511b9a4e3ece33ec47ffe1d38927deb2",
+      "bytes": 284350,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_image.py",
+      "scenarios": [
+        "S05"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "needs_vision": [
+          1
+        ]
+      },
+      "notes": "Synthetic handwritten-style chemistry notes on lined paper texture"
+    },
+    {
+      "path": "image/sample.webp",
+      "format": "image",
+      "sha256": "18c36e074c1675e4d43e312d15efdc6a6b002fdbdc70a42e0e6ae5651578e281",
+      "bytes": 7504,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_image.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "needs_vision": [
+          1
+        ]
+      },
+      "notes": "Synthetic damped oscillation plot as WebP"
+    },
+    {
+      "path": "med/phantom.dcm",
+      "format": "dicom",
+      "sha256": "7fbf073060cc809ef819c0eebbd44c203f770716a7799a6910f4673828e0e3a3",
+      "bytes": 4808,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_med.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "needs_vision": [
+          1
+        ],
+        "contains": [
+          "Anonymous^Test",
+          "Synthetic Phantom"
+        ]
+      },
+      "notes": "Synthetic 64x64 8-bit grayscale DICOM phantom, no real patient data"
+    },
+    {
+      "path": "pdf/corrupt-truncated.pdf",
+      "format": "pdf",
+      "sha256": "aab266cc182718ced12eac8e55004dc6fbb26d9eb49df73de00ed0298ac26b3f",
+      "bytes": 1858,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_pdf.py",
+      "scenarios": [
+        "S30"
+      ],
+      "expect": {
+        "outcome": "failed",
+        "code": "corrupt"
+      },
+      "notes": "First half of the bytes of pdf/text-3pages.pdf"
+    },
+    {
+      "path": "pdf/encrypted.pdf",
+      "format": "pdf",
+      "sha256": "68f7b9bf88fd32aa1f31bafabbcf064ee9d5591cb73fed6c113e483c394d152a",
+      "bytes": 1505,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_pdf.py",
+      "scenarios": [
+        "S30"
+      ],
+      "expect": {
+        "outcome": "failed",
+        "code": "encrypted"
+      },
+      "notes": "User password protected PDF (password: fixture)"
+    },
+    {
+      "path": "pdf/indic-hindi.pdf",
+      "format": "pdf",
+      "sha256": "e05d1602c1a278e20ed1b4fbd12c74dd9033f82e9a4076812d21316dea9015b2",
+      "bytes": 27581,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_pdf.py",
+      "scenarios": [
+        "S38"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "script": "Devanagari",
+        "search_words": [
+          "कोशिका",
+          "संश्लेषण",
+          "ऑक्सीजन"
+        ],
+        "contains": [
+          "कोशिका जीवन की सबसे छोटी संरचनात्मक इकाई है।",
+          "हरितलवक में प्रकाश संश्लेषण की प्रक्रिया सूर्य के प्रकाश में होती है।",
+          "जल और कार्बन डाइऑक्साइड मिलकर शर्करा तथा ऑक्सीजन बनाते हैं।"
+        ]
+      },
+      "notes": "Original Devanagari sentences rendered with Nirmala.ttc"
+    },
+    {
+      "path": "pdf/indic-kannada.pdf",
+      "format": "pdf",
+      "sha256": "808dac928d99d7b497f194fa9ffd673d1703c0e86a1e0280d855fc1352277423",
+      "bytes": 32097,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_pdf.py",
+      "scenarios": [
+        "S38"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "script": "Kannada",
+        "search_words": [
+          "ಜೀವಕೋಶವು",
+          "ದ್ಯುತಿಸಂಶ್ಲೇಷಣೆ",
+          "ಗ್ಲೂಕೋಸ್"
+        ],
+        "contains": [
+          "ಜೀವಕೋಶವು ಜೀವಿಗಳ ಮೂಲಭೂತ ರಚನಾತ್ಮಕ ಘಟಕವಾಗಿದೆ.",
+          "ಹಸಿರು ಎಲೆಗಳಲ್ಲಿ ಸೂರ್ಯನ ಬೆಳಕಿನಿಂದ ದ್ಯುತಿಸಂಶ್ಲೇಷಣೆ ನಡೆಯುತ್ತದೆ.",
+          "ನೀರು ಮತ್ತು ಇಂಗಾಲದ ಡೈಆಕ್ಸೈಡ್ ಸೇರಿ ಗ್ಲೂಕೋಸ್ ಉತ್ಪತ್ತಿಯಾಗುತ್ತದೆ."
+        ]
+      },
+      "notes": "Original Kannada sentences rendered with Nirmala.ttc"
+    },
+    {
+      "path": "pdf/indic-malayalam.pdf",
+      "format": "pdf",
+      "sha256": "cf1e5f0c73ac9bbe0efadc540aec018047bc3b02d1fc7ed117f1f2c955f36d6d",
+      "bytes": 31805,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_pdf.py",
+      "scenarios": [
+        "S38"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "script": "Malayalam",
+        "search_words": [
+          "പ്രകാശസംശ്ലേഷണം",
+          "അവൻ",
+          "അവന്‍",
+          "കോശങ്ങളിലെ"
+        ],
+        "contains": [
+          "കോശങ്ങളിലെ പ്രകാശസംശ്ലേഷണം സൂര്യപ്രകാശത്തിൽ നടക്കുന്നു.",
+          "അവൻ പ്രകാശപഠനം നടത്തുന്നു; അവന്‍ ഈ കുറിപ്പുകൾ വായിക്കുന്നു.",
+          "താപനിലയും ജലലഭ്യതയും ചെടികളുടെ വളർച്ചയെ സ്വാധീനിക്കുന്നു."
+        ]
+      },
+      "notes": "Original Malayalam sentences rendered with Nirmala.ttc"
+    },
+    {
+      "path": "pdf/mixed-threshold.pdf",
+      "format": "pdf",
+      "sha256": "87413888d8b6a4ee80b16de63885bb9cce3cd9e4a2dc5e26b8fc485d9d07e650",
+      "bytes": 2346,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_pdf.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 3,
+        "page_chars": [
+          39,
+          40,
+          41
+        ],
+        "needs_vision": [
+          1
+        ],
+        "contains": [
+          "chlorophyll"
+        ]
+      },
+      "notes": "Boundary pages for the 40-character vision threshold"
+    },
+    {
+      "path": "pdf/scanned-2pages.pdf",
+      "format": "pdf",
+      "sha256": "809a53a009c1e63d33daea3fcf12c741c94a50b9489967275020076bfaf40c80",
+      "bytes": 20369,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_pdf.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 2,
+        "page_chars": [
+          0,
+          0
+        ],
+        "needs_vision": [
+          1,
+          2
+        ]
+      },
+      "notes": "Two rasterised pages with no embedded text layer"
+    },
+    {
+      "path": "pdf/table.pdf",
+      "format": "pdf",
+      "sha256": "9c00b488328af4cbeb6dd3fc3ab8bce674f77ff7e50553facf7684782071f199",
+      "bytes": 1808,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_pdf.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 1,
+        "needs_vision": [],
+        "contains": [
+          "Element",
+          "Symbol",
+          "Atomic Number",
+          "Carbon",
+          "Oxygen",
+          "Silicon"
+        ]
+      },
+      "notes": "Ruled 4x3 element table"
+    },
+    {
+      "path": "pdf/text-3pages.pdf",
+      "format": "pdf",
+      "sha256": "312755a7c3dbec2a2c1983b9db6b1611098061dc7c5d62e56d6067327bd4e488",
+      "bytes": 3717,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_pdf.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "pages": 3,
+        "needs_vision": [],
+        "contains": [
+          "organelles",
+          "adenosine triphosphate",
+          "electron transport"
+        ],
+        "units_hint": [
+          "Unit 1 Cells",
+          "Unit 2 Energy"
+        ]
+      },
+      "notes": "Three text-rich pages (>=200 chars each) with two unit bookmarks"
+    },
+    {
+      "path": "pptx/notes-and-image.pptx",
+      "format": "pptx",
+      "sha256": "a3d6d75e6dde95fe04785db9994a5df3610d0a0cafb3abb6277f28905da5a308",
+      "bytes": 36598,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_pptx.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "slides": 3,
+        "needs_vision": [
+          3
+        ],
+        "contains": [
+          "First Law of Thermodynamics",
+          "Internal energy changes through heat transfer",
+          "Isolated systems evolve toward equilibrium"
+        ],
+        "notes_contains": [
+          "reversible isothermal expansion"
+        ]
+      },
+      "notes": "Slide 1 title+body, slide 2 body+speaker notes, slide 3 image only"
+    },
+    {
+      "path": "stubs/drawing.dwg",
+      "format": "dwg",
+      "sha256": "34b5a41032ebddcdcd66bdfef4ba5bdb1f9d77153a2aa0e7c735013505bac40b",
+      "bytes": 64,
+      "stub": true,
+      "generator": "scripts/fixtures/gen_stubs.py",
+      "scenarios": [
+        "S07"
+      ],
+      "expect": {
+        "outcome": "pending",
+        "code": "tool_missing",
+        "tool": "oda"
+      },
+      "notes": "AC1032 AutoCAD R2018 DWG magic stub for Tier 2 routing"
+    },
+    {
+      "path": "stubs/model.rvt",
+      "format": "rvt",
+      "sha256": "a899fb4496afa7230c378d5be03cf3461990994993110fd2dad3257111081275",
+      "bytes": 512,
+      "stub": true,
+      "generator": "scripts/fixtures/gen_stubs.py",
+      "scenarios": [
+        "S09"
+      ],
+      "expect": {
+        "outcome": "failed",
+        "code": "unsupported"
+      },
+      "notes": "OLE compound header stub for unsupported Revit format"
+    },
+    {
+      "path": "stubs/model.skp",
+      "format": "skp",
+      "sha256": "2a672af86ab2e31d2c1cbbeb142e825b8b4cd912fd35c27a7929c18840d12083",
+      "bytes": 64,
+      "stub": true,
+      "generator": "scripts/fixtures/gen_stubs.py",
+      "scenarios": [
+        "S09"
+      ],
+      "expect": {
+        "outcome": "failed",
+        "code": "unsupported"
+      },
+      "notes": "SketchUp header stub for unsupported format routing"
+    },
+    {
+      "path": "stubs/scene.blend",
+      "format": "blend",
+      "sha256": "3f8ba7fc3d8cc605aaf38becf722e5568dcef43c4ce99c0bc05e5c1ea6efb443",
+      "bytes": 64,
+      "stub": true,
+      "generator": "scripts/fixtures/gen_stubs.py",
+      "scenarios": [
+        "S08"
+      ],
+      "expect": {
+        "outcome": "pending",
+        "code": "tool_missing",
+        "tool": "blender"
+      },
+      "notes": "BLENDER-v300 magic stub for Tier 2 routing"
+    },
+    {
+      "path": "text/Sample.java",
+      "format": "code",
+      "sha256": "a63b333d267044eac967139103780477b7ef234c69870e8b5508f42fc227db46",
+      "bytes": 484,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_text.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "contains": [
+          "class Sample",
+          "binarySearch"
+        ]
+      },
+      "notes": "Original Java source fixture"
+    },
+    {
+      "path": "text/book.epub",
+      "format": "epub",
+      "sha256": "ffa3139c08e957788569e00f2bab3a868d95729ba21306dfa4d416bbf38f9604",
+      "bytes": 1877,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_text.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "contains": [
+          "Chapter 1: Cell Division",
+          "Chapter 2: Gene Expression"
+        ]
+      },
+      "notes": "Hand-built EPUB 3 archive with stored mimetype entry first and two chapters"
+    },
+    {
+      "path": "text/malayalam-nfc.txt",
+      "format": "txt",
+      "sha256": "aa7a4839de951bfc078f893791c85428c489c9efd32edbb0015f00b511b41b6c",
+      "bytes": 482,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_text.py",
+      "scenarios": [
+        "S38"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "script": "Malayalam",
+        "contains": [
+          "കോശങ്ങളിലെ പ്രകാശസംശ്ലേഷണം സൂര്യപ്രകാശത്തിൽ നടക്കുന്നു.",
+          "അവൻ പ്രകാശപഠനം നടത്തുന്നു; അവന്‍ ഈ കുറിപ്പുകൾ വായിക്കുന്നു.",
+          "താപനിലയും ജലലഭ്യതയും ചെടികളുടെ വളർച്ചയെ സ്വാധീനിക്കുന്നു."
+        ]
+      },
+      "notes": "NFC-normalised copy of the Malayalam chillu and ZWJ test text"
+    },
+    {
+      "path": "text/malayalam-nfd.txt",
+      "format": "txt",
+      "sha256": "b6024db85322f39703ee187f05759f4cfc99a22e615c225fc68cedd4d504ae09",
+      "bytes": 485,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_text.py",
+      "scenarios": [
+        "S38"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "script": "Malayalam",
+        "contains": [
+          "കോശങ്ങളിലെ പ്രകാശസംശ്ലേഷണം സൂര്യപ്രകാശത്തിൽ നടക്കുന്നു.",
+          "അവൻ പ്രകാശപഠനം നടത്തുന്നു; അവന്‍ ഈ കുറിപ്പുകൾ വായിക്കുന്നു.",
+          "താപനിലയും ജലലഭ്യതയും ചെടികളുടെ വളർച്ചയെ സ്വാധീനിക്കുന്നു."
+        ]
+      },
+      "notes": "NFD-normalised copy of the Malayalam chillu and ZWJ test text"
+    },
+    {
+      "path": "text/notebook.ipynb",
+      "format": "ipynb",
+      "sha256": "c7e6433047c3cdd9ccd074c70137558b9c6b912e8dbde17f7a33633352128a8a",
+      "bytes": 1559,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_text.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "contains": [
+          "Harmonic Oscillator",
+          "def potential_energy",
+          "0.125"
+        ]
+      },
+      "notes": "Jupyter notebook with one Markdown cell and two ruff-clean code cells"
+    },
+    {
+      "path": "text/notes-crlf-bom.md",
+      "format": "md",
+      "sha256": "d7ef98001bc64a6a96af3f1149bbc10855755423ad53ff9d0c8a0db999dd7cc4",
+      "bytes": 135,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_text.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "contains": [
+          "Chemical Equilibrium",
+          "Le Chatelier"
+        ]
+      },
+      "notes": "UTF-8 with BOM and CRLF line endings"
+    },
+    {
+      "path": "text/notes.md",
+      "format": "md",
+      "sha256": "9cb59265b57be60ce519cf23156c66eead5ef99b4fa3896304ce0d4fa1aa1fea",
+      "bytes": 221,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_text.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "contains": [
+          "Wave Optics Summary",
+          "Snell's Law",
+          "Refractive Index"
+        ]
+      },
+      "notes": "UTF-8 LF Markdown study notes with headings"
+    },
+    {
+      "path": "text/page.html",
+      "format": "html",
+      "sha256": "20565933dc4a9c0d175ff02a4cb167aba5e8f2276f70c8ad667aea6cf60f7c94",
+      "bytes": 338,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_text.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "contains": [
+          "Acoustic Resonance",
+          "Standing waves form in open pipes"
+        ]
+      },
+      "notes": "Clean HTML5 document with headings and list items"
+    },
+    {
+      "path": "text/plain.txt",
+      "format": "txt",
+      "sha256": "dd83df9f55ca3214bbd0fc0e1cb05d8162e83b90a70106ed7fdd4fba047850a2",
+      "bytes": 162,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_text.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "contains": [
+          "Newtonian mechanics",
+          "conservation of linear momentum"
+        ]
+      },
+      "notes": "Plain UTF-8 LF text study note"
+    },
+    {
+      "path": "text/sample.c",
+      "format": "code",
+      "sha256": "eefc4c70c27cffa9291a2c4cbd6ab49c2f1155ba65d950f723dcc0cede1baaba",
+      "bytes": 166,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_text.py",
+      "scenarios": [
+        "S04"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "contains": [
+          "greatest_common_divisor",
+          "while (b != 0)"
+        ]
+      },
+      "notes": "Original C source fixture"
+    },
+    {
+      "path": "xlsx/formulas.xlsx",
+      "format": "xlsx",
+      "sha256": "cbc4fe28abdab6d2d6cecba216e89f6d6acbbe25ed2410b63f2875166d57c93f",
+      "bytes": 6021,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_xlsx.py",
+      "scenarios": [
+        "S06"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "sheets": [
+          {
+            "name": "Data",
+            "formulas": {},
+            "values": {
+              "A1": "Sample",
+              "B1": "Mass",
+              "A2": "Alpha",
+              "B2": 12,
+              "A3": "Beta",
+              "B3": 18,
+              "A4": "Gamma",
+              "B4": 30
+            }
+          },
+          {
+            "name": "Summary",
+            "formulas": {
+              "B2": "=SUM(Data!B2:B4)",
+              "B3": "=B2/3",
+              "B4": "=Data!B4"
+            },
+            "values": {
+              "A1": "Metric",
+              "B1": "Value",
+              "A2": "Total Mass",
+              "B2": 60,
+              "A3": "Mean Mass",
+              "B3": 20,
+              "A4": "Peak Sample",
+              "B4": 30
+            }
+          }
+        ],
+        "named_ranges": [
+          "SampleMasses"
+        ]
+      },
+      "notes": "XlsxWriter workbook with cached formula values and a named range"
+    },
+    {
+      "path": "xlsx/legacy.xls",
+      "format": "xls",
+      "sha256": "0260818c11700763a22eab170e0ae5d92052cf512d584c7434de3035fa5c710f",
+      "bytes": 5632,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_xlsx.py",
+      "scenarios": [
+        "S06"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "sheets": [
+          {
+            "name": "Data",
+            "formulas": {},
+            "values": {
+              "A1": "Sample",
+              "B1": "Mass",
+              "A2": "Alpha",
+              "B2": 12,
+              "A3": "Beta",
+              "B3": 18
+            }
+          }
+        ]
+      },
+      "notes": "Legacy BIFF8 workbook written with BSD-licensed xlwt"
+    },
+    {
+      "path": "xlsx/sheet.ods",
+      "format": "ods",
+      "sha256": "57240784899cc0b222e1fec8b43d557e86261dd0a42b0593b797ebfd432d2bf5",
+      "bytes": 1239,
+      "stub": false,
+      "generator": "scripts/fixtures/gen_xlsx.py",
+      "scenarios": [
+        "S06"
+      ],
+      "expect": {
+        "outcome": "extracted",
+        "sheets": [
+          {
+            "name": "Data",
+            "formulas": {
+              "B4": "=SUM(B2:B3)"
+            },
+            "values": {
+              "A1": "Item",
+              "B1": "Score",
+              "A2": "Quiz 1",
+              "B2": 14,
+              "A3": "Quiz 2",
+              "B3": 16,
+              "A4": "Total",
+              "B4": 30
+            }
+          }
+        ]
+      },
+      "notes": "Hand-built OpenDocument spreadsheet with stored mimetype entry first"
+    }
+  ]
+}
