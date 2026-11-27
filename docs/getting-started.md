@@ -84,7 +84,7 @@ This is the route used to produce the results in [TESTING.md](../TESTING.md) and
 
 ```powershell
 uv venv venv
-uv pip install --python venv\Scripts\python.exe lucubra-0.0.1-py3-none-win_amd64.whl
+uv pip install --python venv\Scripts\python.exe lucubra-1.0.0b1-py3-none-win_amd64.whl
 venv\Scripts\lucubra.exe --version
 ```
 
