@@ -54,6 +54,8 @@ pub mod col {
     pub const HANDOFFS: &str = "handoffs";
     /// Daily wellbeing check-ins by local date `YYYY-MM-DD` (the last of a day wins).
     pub const CHECKINS: &str = "checkins";
+    /// Learning and output preferences by key (`PREFERENCES.md`, A9).
+    pub const PREFERENCES: &str = "preferences";
 }
 
 /// Event types the engine folds into state. Other known types are stored in
@@ -96,6 +98,7 @@ pub const FOLDED_TYPES: &[&str] = &[
     "pack.built",
     "handoff.ingested",
     "checkin.logged",
+    "preference.set",
 ];
 
 /// Why an event did not change state.
@@ -140,7 +143,7 @@ impl State {
         self.collections.get(name)?.get(key)
     }
 
-    fn put(&mut self, name: &str, key: &str, value: Value) {
+    pub(crate) fn put(&mut self, name: &str, key: &str, value: Value) {
         self.collections
             .entry(name.to_owned())
             .or_default()
@@ -436,6 +439,11 @@ impl State {
                 entry.insert("date".into(), Value::String(date.to_owned()));
                 self.put(col::CHECKINS, date, Value::Object(entry));
             }
+            "preference.set" => {
+                let key = str_field(data, "key").ok_or(Skip::BadPayload("key"))?;
+                let value = data.get("value").ok_or(Skip::BadPayload("value"))?;
+                self.put(col::PREFERENCES, key, value.clone());
+            }
             "transcript.saved" => {
                 let hash = str_field(data, "hash").ok_or(Skip::BadPayload("hash"))?;
                 let key = transcript_key(hash, data);
@@ -492,6 +500,14 @@ impl State {
                 entry.insert("steps_count".into(), Value::from(prev_steps + 1));
                 if let Some(unit) = str_field(data, "unit") {
                     entry.insert("last_unit".into(), Value::String(unit.to_owned()));
+                    let mut per_unit = existing
+                        .and_then(|v| v.get("unit_minutes"))
+                        .and_then(Value::as_object)
+                        .cloned()
+                        .unwrap_or_default();
+                    let before = per_unit.get(unit).and_then(Value::as_u64).unwrap_or(0);
+                    per_unit.insert(unit.to_owned(), Value::from(before + minutes));
+                    entry.insert("unit_minutes".into(), Value::Object(per_unit));
                 }
                 if let Some(style) = str_field(data, "style") {
                     entry.insert("last_style".into(), Value::String(style.to_owned()));
