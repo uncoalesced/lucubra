@@ -105,6 +105,103 @@ enum Command {
     Mcp(Target),
     /// Start the companion page on 127.0.0.1 and print its address.
     Serve(Target),
+    /// Term lifecycle commands.
+    Term {
+        #[command(subcommand)]
+        action: TermAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum TermAction {
+    /// Close a term: copy the generated files into `archive/<term>/`, carry
+    /// failed subjects over with their mastery and items, and retire the other
+    /// subjects' cards (or keep them on a slow schedule with `--keep`).
+    Close {
+        #[command(flatten)]
+        target: Target,
+        /// Term label, for example "Semester 5".
+        #[arg(long)]
+        term: String,
+        /// Subject slug whose cards stay on a slow review schedule (repeatable).
+        #[arg(long)]
+        keep: Vec<String>,
+    },
+}
+
+/// Folder name for a term label, or `None` when the label is unsafe.
+fn term_folder(term: &str) -> Option<String> {
+    let t = term.trim();
+    let ok = !t.is_empty()
+        && t.len() <= 40
+        && !t.starts_with('.')
+        && t.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.'));
+    ok.then(|| t.to_ascii_lowercase().replace(' ', "-"))
+}
+
+fn term_close(ws: &Workspace, term: &str, keep: &[String]) -> lucubra_core::Result<()> {
+    let bad = |m: String| lucubra_core::Error::io("closing the term", std::io::Error::other(m));
+    let folder = term_folder(term).ok_or_else(|| {
+        bad("the term label may use letters, digits, spaces, '-', '_' and '.' (at most 40 characters)".into())
+    })?;
+    let state = ws.replay()?.state;
+    let day = (std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+        / 86_400) as i64;
+    let payload =
+        lucubra_core::grades::close_payload(&state, term.trim(), keep, day).map_err(bad)?;
+    // Copy generated files only; the user's notes and sources stay where they are.
+    let root = ws.root();
+    let mut paths: Vec<String> = lucubra_core::projection::render(&state)
+        .files
+        .into_keys()
+        .collect();
+    paths.push("schedule/lucubra-plan.ics".into());
+    if let Ok(entries) = std::fs::read_dir(root.join("sessions")) {
+        paths.extend(
+            entries
+                .filter_map(|e| e.ok()?.file_name().into_string().ok())
+                .map(|n| format!("sessions/{n}")),
+        );
+    }
+    let dest_root = root.join("archive").join(&folder);
+    let mut copied = 0;
+    for rel in paths {
+        let src = root.join(&rel);
+        if !src.is_file() {
+            continue;
+        }
+        let dest = dest_root.join(&rel);
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| lucubra_core::Error::io("creating the archive folder", e))?;
+        }
+        std::fs::copy(&src, &dest)
+            .map_err(|e| lucubra_core::Error::io("copying into the archive", e))?;
+        copied += 1;
+    }
+    ws.append("term.closed", payload.clone())?;
+    ws.project()?;
+    let names = |k: &str| {
+        payload[k]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .unwrap_or_default()
+    };
+    println!("term closed: {}", term.trim());
+    println!("archived files: {copied} in archive/{folder}/");
+    println!("carried over: {}", names("carried"));
+    println!("kept on a slow schedule: {}", names("kept"));
+    println!("retired: {}", names("retired"));
+    Ok(())
 }
 
 fn print_scan(report: &lucubra_ingest::ScanReport) {
@@ -281,6 +378,12 @@ fn run(command: Command) -> lucubra_core::Result<()> {
         Command::Project(target) => {
             let ws = Workspace::open(&workspace_path(&target), &data_dir)?;
             print_report(&ws.project()?);
+        }
+        Command::Term {
+            action: TermAction::Close { target, term, keep },
+        } => {
+            let ws = Workspace::open(&workspace_path(&target), &data_dir)?;
+            term_close(&ws, &term, &keep)?;
         }
         Command::Reset { target, yes } => {
             let ws = Workspace::open(&workspace_path(&target), &data_dir)?;
