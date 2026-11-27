@@ -2,12 +2,16 @@
 
 This document traces the data that Lucubra reads, writes and sends. It covers the paths on disk, the content returned to an AI host, what never leaves the machine, how long each item is kept, how to inspect it and how to delete it.
 
-The claims were checked against the source tree at commit `eb106e0` (branch `main`, 2026-11-23). Each claim names the file that implements it, so you can check it yourself. Where a behaviour depends on a feature that is not yet in the build, the text says so in the section "Planned features". This document is re-verified before each release.
+The claims were checked against the source tree on 2026-11-27 (branch `feat/r4-practice`, based on `main` at `1a1c4f4`). Each claim names the file that implements it, so you can check it yourself. Where a behaviour depends on a feature that is not yet in the build, the text says so in the section "Planned features". This document is re-verified before each release.
 
 ## Summary
 
-- Lucubra does not open network connections. The crates and the Python workers contain no HTTP client, no telemetry, and no update check. The default build opens no listening socket.
-- Lucubra runs as a child process of an AI host. The host starts `lucubra mcp` and talks to it over standard input and output. Lucubra never starts a connection of its own.
+- Lucubra has no telemetry, no crash reporting and no update check. The Python workers contain no HTTP client.
+- Lucubra runs as a child process of an AI host. The host starts `lucubra mcp` and talks to it over standard input and output.
+- The engine opens an outgoing connection in two opt-in cases only. Both use the `ureq` client in `lucubra-mcp`, and neither sends cookies, a referrer or workspace content:
+  - the iCal address you supply, read for busy times (section 1)
+  - a download you ask for, from a domain listed in `SOURCES.md` (section 1)
+- The engine listens on a port only while `lucubra serve` runs the companion page, on `127.0.0.1` with a per-launch token.
 - The only data that leaves Lucubra is the content of tool responses sent to the host that started it. The host then sends that content to its model provider, unless the model runs on the same machine. That step is governed by the host's terms and is outside Lucubra's control.
 - Lucubra keeps its state in two places: the `.lucubra/` folder inside your workspace (plain text event logs and hash records) and one application-data directory on the machine (a device identifier and a rebuildable cache).
 - Scanning, extraction, indexing and search do not modify your source files. Lucubra writes new files only in the places listed in section 4.
@@ -16,11 +20,11 @@ The claims were checked against the source tree at commit `eb106e0` (branch `mai
 
 | Behaviour | Status in this build | Source |
 |---|---|---|
-| Opens outgoing network connections | None. No HTTP client crate in `Cargo.lock` or `uv.lock` | `Cargo.lock`, `uv.lock` |
+| Opens outgoing network connections | Only for two requests you make, both in `lucubra-mcp` through `ureq` (the only HTTP client in `Cargo.lock`; none in `uv.lock`):<br>- **The iCal address you supply.** It is stored in the application-data directory, never in the workspace or the event log, and error messages never contain it.<br>- **`lucubra_ingest(action="fetch")`.** It is off until `SOURCES.md` exists. HTTPS is required (plain HTTP only to `127.0.0.1` or `localhost`). The first host and every redirect hop must match a listed domain or one of its subdomains, so an unlisted domain is refused before any connection is made. The input size limit (1 GiB) and a 60-second timeout apply. The file is saved in `inbox/`, and the `source.fetched` event records only the domain, the file name and the size, never the path or query of the address. | `crates/lucubra-mcp/src/tools/plan.rs` (`fetch_ics`), `crates/lucubra-core/src/calendar.rs`, `crates/lucubra-mcp/src/fetch.rs`, `crates/lucubra-mcp/src/tools/ingest.rs` |
 | Sends telemetry or crash reports | None. No telemetry code path | `crates/`, `python/` |
 | Checks for updates | None. No update request (decision D43) | `docs/adr/0002-mcpb-bundle-type.md` |
-| Listens on a network port | None in the default build. Streamable HTTP is behind the optional `http-transport` feature, which is off by default and not used by the CLI | `crates/lucubra-mcp/Cargo.toml`, `crates/lucubra-mcp/src/transport.rs`, `docs/adr/0012-mcp-server-surface-and-budgets.md` |
-| Downloads web pages or files | Not implemented. The `fetch` action of `lucubra_ingest` returns a NotImplemented error | `crates/lucubra-mcp/src/tools/ingest.rs` |
+| Listens on a network port | Only while `lucubra serve` runs the companion page. It binds `127.0.0.1` on a free port, and every request must carry the per-launch token, a matching `Host` and, when present, a matching `Origin`. Streamable HTTP for MCP is behind the optional `http-transport` feature, which is off by default and not used by the CLI. | `crates/lucubra-companion/src/lib.rs`, `crates/lucubra-mcp/Cargo.toml`, `crates/lucubra-mcp/src/transport.rs` |
+| Sends outbound webhooks | No. Webhooks are on the roadmap, not in this build (decision D58) | `crates/` |
 | Reads files outside the workspace | Tool paths are confined to the workspace root. Absolute paths, parent-directory components, symlink escapes and `.lucubra/` are rejected | `crates/lucubra-mcp/src/material.rs`, `crates/lucubra-mcp/src/envelope.rs` |
 | Opens files that are only in the cloud | No. Online-only placeholders are counted and their size is reported; the file is never opened | `docs/adr/0011-ingestion-pipeline-and-limits.md` (section 1) |
 | Asks for or stores passwords of protected files | No. Password-protected files fail with the code `encrypted` and are never prompted for | `docs/adr/0011-ingestion-pipeline-and-limits.md` (section 3) |
@@ -31,10 +35,17 @@ To check the first, second and third rows from a clone of the repository:
 ```sh
 grep -cE '^name = "(reqwest|hyper|ureq|isahc|native-tls|curl|attohttpc|surf)"' Cargo.lock
 grep -cE '^name = "(requests|httpx|urllib3|aiohttp|pycurl)"' uv.lock
-grep -rn 'TcpListener\|UdpSocket' crates --include='*.rs'
+grep -rln 'ureq::' crates --include='*.rs'
+grep -rln 'TcpListener\|UdpSocket' crates/*/src --include='*.rs'
 ```
 
-Each command should print `0` or nothing. The lock file checks cover the direct and transitive dependencies of both languages.
+The commands should print, in order:
+1. `1`, for `ureq`
+2. `0`
+3. only `crates/lucubra-mcp/src/fetch.rs` and `crates/lucubra-mcp/src/tools/plan.rs`
+4. only `crates/lucubra-companion/src/lib.rs`
+
+The lock file checks cover the direct and transitive dependencies of both languages.
 
 ## 2. Processes
 
@@ -78,7 +89,14 @@ Paths are relative to the workspace folder unless they start with `<data-dir>`. 
 | `<data-dir>/device_id` | Device identifier, `d-` followed by eight hexadecimal digits | First run of any command that writes events | `crates/lucubra-core/src/appdata.rs` |
 | `<data-dir>/workspaces/<workspace-id>/cache.sqlite` | State cache: tables `meta`, `applied` and `state`, the full-text index, extracted text, chunks and rendered page images | Ingestion and rebuild | `crates/lucubra-core/src/cache.rs`, `docs/adr/0010-app-data-cache-and-reset.md`, `docs/adr/0011-ingestion-pipeline-and-limits.md` (section 6) |
 | `<data-dir>/workspaces/<workspace-id>/tier2/<pid>-<n>/` | Scratch folder for one Tier 2 run (a helper script and its JSON output). Removed when the run ends | Tier 2 extraction | `crates/lucubra-ingest/src/tier2.rs` |
-| `schedule/lucubra-plan.ics` | Reserved path for the study plan calendar file. This build does not write it | Planner, not yet built | `crates/lucubra-ingest/src/discover.rs` (listed as generated) |
+| `schedule/lucubra-plan.ics` | The accepted study plan as calendar events, with alarms only for the reminder types you turned on | Plan accept and preference changes | `crates/lucubra-core/src/projection.rs` |
+| `sessions/SESSION_*.md` and `sessions/SCRIPT_*.md` | Session handoffs and study scripts. Generated | Session end, plan accept | `crates/lucubra-core/src/projection.rs` |
+| `PREFERENCES.md` | Your learning preferences, at most 600 tokens. Generated; your edits are preserved | `lucubra_profile(preference)` | `crates/lucubra-core/src/preferences.rs` |
+| `exports/MOCK_<date>_<subject>.md` and `.html` | Printable mock test papers, with no answer key | `lucubra_export(mock_test)` | `crates/lucubra-core/src/mock.rs` |
+| `inbox/<file>` | A file you asked Lucubra to download from a `SOURCES.md` domain | `lucubra_ingest(fetch)` | `crates/lucubra-mcp/src/fetch.rs` |
+| `archive/<term>/` | Copies of the generated files at a term close. Your own files are not copied or moved | `lucubra term close` | `crates/lucubra-cli/src/main.rs` |
+| `.lucubra/reports/doctor-<time>.txt` | Redacted diagnostic report, written only when you run `lucubra doctor --report` | `lucubra doctor --report` | `crates/lucubra-cli/src/main.rs`, `crates/lucubra-ingest/src/doctor.rs` |
+| `<data-dir>/workspaces/<workspace-id>/calendar.url` | The iCal address you supplied, kept outside the workspace so it is never synced or logged | `lucubra_profile` (`calendar_ical_url`) | `crates/lucubra-core/src/calendar.rs` |
 
 Lucubra does not write diagnostics to a log file. Diagnostics go to standard error, and the host decides where they are kept. See `docs/adr/0012-mcp-server-surface-and-budgets.md` (decision 4).
 
@@ -221,9 +239,8 @@ After steps 2 and 3, the `lucubra` commands that need state will create it again
 
 These features are planned. None of them is in the current build, and each is opt-in:
 
-- Calendar reading through a calendar secret address (iCal) that you supply. The address would be stored outside the workspace, in the operating system's credential store. Planned for milestone M5.
 - Optional vector search. The optional extra is off by default (`docs/adr/0005-embedding-stack.md`). Any model download would happen only after you opt in. Planned.
-- A companion page on the loopback address (`127.0.0.1`) for hosts that cannot reach a local server. It would require a token and check the Host and Origin headers. Planned for milestone M7.
+- Outbound webhooks to your own automation (decision D58, roadmap). By design they would send only event names and counts, never content, unless you turn content on.
 
 When any of these is built, the sections 1, 5 and 11 of this document change, and the release checks in section 13 are run again before the release.
 
@@ -236,4 +253,4 @@ This document is verified before each release with these checks (run from a clon
 3. The Blender helper is started with autoexec disabled (flag `--disable-autoexec` in `crates/lucubra-ingest/src/tier2.rs`). At the time of writing this flag is on `feat/m4-onboarding` only, not on `main`. This check stays open until the change reaches `main`.
 4. The release build starts with `lucubra mcp` and makes no connection other than standard input and output. The test report for the release records the run.
 
-Checks 1 and 2 were run against `eb106e0`. Check 3 is open. Check 4 is run on the release candidate.
+Check 1 was run on 2026-11-27 against `feat/r4-practice`. Check 2 was last run against `eb106e0` and is re-run on the release candidate. Check 3 is open. Check 4 is run on the release candidate.
